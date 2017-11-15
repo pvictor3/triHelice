@@ -1,5 +1,7 @@
 #include<stdint.h>
 #include<stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 #include "CMSIS.h"
 
@@ -21,18 +23,28 @@ void IntGPIOAHandler(void);
 //
 //*****************************************************************************
 void
-UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
+UARTSend(char *format, ...)
 {
+    char str[80];
+    char *s;
+
+    //Extract the argument list using VA apis
+    va_list args;
+    va_start(args, format);
+    vsprintf(str, format, args);
+    s = str;
+
     //
     // Loop while there are more characters to send.
     //
-    while(ui32Count--)
+    while(*s)
     {
         //
         // Write the next character to the UART.
         //
-        ROM_UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
+        ROM_UARTCharPutNonBlocking(UART0_BASE, *s++);
     }
+    va_end(args);
 }
 
 int main(void)
@@ -109,17 +121,29 @@ int main(void)
     //
     // Prompt for text to be entered.
     //
-    UARTSend((uint8_t *)"Flight Controller V1.0", 16);
+    UARTSend("Flight Controller");
+
+    /*
+     * Configuracion del timer
+     * */
+    SYSCTL->RCGCTIMER = 0x01;
+    TIMER0->CTL = 0x00;
+    TIMER0->CFG = 0x00;
+    TIMER0->TAMR = (1<<1)|(1<<4);
+    TIMER0->TAILR = 0xFFFFFFFF;
+    TIMER0->CTL = (1<<0);
 
 	while(1);
 }
 
 void IntGPIOAHandler(void){
+    uint32_t time = 0;
     if( (GPIOA->DATA & (1<<2) ) ){
-        UARTSend((uint8_t *)"High",4);
+        TIMER0->TAV = 0x00;
     }
     else{
-        UARTSend((uint8_t *)"Low",3);
+        time = TIMER0->TAR;
+        UARTSend("Tiempo = %d",time);
     }
     GPIOA->ICR = (1<<2);
 }
