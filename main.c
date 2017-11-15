@@ -7,14 +7,41 @@
 #include"inc/hw_memmap.h"
 #include"inc/hw_types.h"
 #include"driverlib/sysctl.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/uart.h"
+#include "driverlib/gpio.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
+
+void IntGPIOAHandler(void);
+//*****************************************************************************
+//
+// Send a string to the UART.
+//
+//*****************************************************************************
+void
+UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
+{
+    //
+    // Loop while there are more characters to send.
+    //
+    while(ui32Count--)
+    {
+        //
+        // Write the next character to the UART.
+        //
+        ROM_UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
+    }
+}
 
 int main(void)
 {
 	ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN); //System clock = 40MHZ
 
+	/*
+	 * Configuración para usar el PWM Modulo 1, Generador 3, salidas PWM6 y PWM7
+	 * */
 	SYSCTL->RCGC2 |= (1<<5);    //Activa el reloj para GPIOF, PF2 y PF3 como M1PWM6 y M1PWM7
 	SYSCTL->RCGCPWM = (1<<1);   //Activa pwm module 1
 
@@ -36,5 +63,63 @@ int main(void)
 	PWM1->_3_CTL = (1<<0);             //PWM block enable
 	PWM1->ENABLE = (1<<7)|(1<<6);   //Activa la salida para PWM6 y PWM7
 
+	//
+	// Enable processor interrupts.
+	//
+	ROM_IntMasterEnable();
+
+
+	/*
+	 * Configuracion para leer el receiver de 5 Canales
+	 * */
+	SYSCTL->RCGC2 |= (1<<0);        //Activa el reloj para GPIOA
+	GPIOA->DIR &= ~((1<<2)|(1<<3)|(1<<4)|(1<<5));   //Pines como entradas
+	GPIOA->DEN = (1<<2);            //Activamos la entrada que queremos leer
+	GPIOA->IM = 0x00;               //Desactiva las interrupciones
+	GPIOA->IS = 0x00;               //Deteccion de flancos
+	GPIOA->IBE = (1<<2)|(1<<3)|(1<<4)|(1<<5);   //Detección de ambos flancos
+	GPIOA->ICR = (1<<2)|(1<<3)|(1<<4)|(1<<5);   //Limpiamos cualquier interrupcion
+	GPIOA->IM = (1<<2);             //Activamos la entrada que queremos leer
+
+    //
+    // Enable the GPIOA interrupt.
+    //
+    ROM_IntEnable(INT_GPIOA);
+
+    //
+    // Enable the peripherals used by UART0.
+    //
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+
+    //
+    // Set GPIO A0 and A1 as UART pins.
+    //
+    ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
+    ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
+    ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+
+    //
+    // Configure the UART for 115,200, 8-N-1 operation.
+    //
+    ROM_UARTConfigSetExpClk(UART0_BASE, ROM_SysCtlClockGet(), 115200,
+                            (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                             UART_CONFIG_PAR_NONE));
+
+    //
+    // Prompt for text to be entered.
+    //
+    UARTSend((uint8_t *)"Flight Controller V1.0", 16);
+
 	while(1);
+}
+
+void IntGPIOAHandler(void){
+    if( (GPIOA->DATA & (1<<2) ) ){
+        UARTSend((uint8_t *)"High",4);
+    }
+    else{
+        UARTSend((uint8_t *)"Low",3);
+    }
+    GPIOA->ICR = (1<<2);
 }
