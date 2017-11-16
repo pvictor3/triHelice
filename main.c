@@ -16,6 +16,8 @@
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
 
+char chanel = 2;
+
 void IntGPIOAHandler(void);
 //*****************************************************************************
 //
@@ -42,7 +44,7 @@ UARTSend(char *format, ...)
         //
         // Write the next character to the UART.
         //
-        ROM_UARTCharPutNonBlocking(UART0_BASE, *s++);
+        ROM_UARTCharPut(UART0_BASE, *s++);
     }
     va_end(args);
 }
@@ -138,12 +140,13 @@ int main(void)
 
 void IntGPIOAHandler(void){
     uint32_t time = 0;
-    if( (GPIOA->DATA & (1<<2) ) ){
+    if( (GPIOA->DATA & (1<<chanel) ) ){
         TIMER0->TAV = 0x00;
     }
     else{
         time = TIMER0->TAR;
-        UARTSend("Tiempo = %d",time);
+        UARTSend("Tiempo = %d\n",time);
+        GPIOA->IM = (1<<chanel);
     }
-    GPIOA->ICR = (1<<2);
+    GPIOA->ICR = (1<<chanel);
 }
