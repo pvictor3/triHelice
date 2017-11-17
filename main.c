@@ -12,11 +12,13 @@
 #include "driverlib/pin_map.h"
 #include "driverlib/uart.h"
 #include "driverlib/gpio.h"
+#include "driverlib/fpu.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
 
-char chanel = 2;
+uint32_t chanel = 2;
+float time[4];
 
 void IntGPIOAHandler(void);
 //*****************************************************************************
@@ -53,16 +55,17 @@ int main(void)
 {
 	ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN); //System clock = 40MHZ
 
+	//FPUEnable();
 	/*
 	 * Configuración para usar el PWM Modulo 1, Generador 3, salidas PWM6 y PWM7
 	 * */
 	SYSCTL->RCGC2 |= (1<<5);    //Activa el reloj para GPIOF, PF2 y PF3 como M1PWM6 y M1PWM7
 	SYSCTL->RCGCPWM = (1<<1);   //Activa pwm module 1
 
-	GPIOF->DIR = (1<<3)|(1<<2); //PF2 y PF3 como salidas
+	GPIOF->DIR = (1<<3)|(1<<2)|(1<<1); //PF2 y PF3 como salidas
 	GPIOF->AFSEL |= (1<<2)|(1<<3);  //Alternate function para PF2 y PF3
 	GPIOF->PCTL |= (5<<8)|(5<<12);  //Codigo para usar como PWM
-	GPIOF->DEN = (1<<3)|(1<<2);     //Digital Enable
+	GPIOF->DEN = (1<<3)|(1<<2)|(1<<1);     //Digital Enable
 	SYSCTL->RCC |= (1<<20);         //Activa el divisor del system clock para el PWM
 	SYSCTL->RCC &= ~(7<<17);         //Pone al divisor en 2
 
@@ -88,7 +91,7 @@ int main(void)
 	 * */
 	SYSCTL->RCGC2 |= (1<<0);        //Activa el reloj para GPIOA
 	GPIOA->DIR &= ~((1<<2)|(1<<3)|(1<<4)|(1<<5));   //Pines como entradas
-	GPIOA->DEN = (1<<2);            //Activamos la entrada que queremos leer
+	GPIOA->DEN = (1<<2)|(1<<3)|(1<<4)|(1<<5);            //Activamos la entrada que queremos leer
 	GPIOA->IM = 0x00;               //Desactiva las interrupciones
 	GPIOA->IS = 0x00;               //Deteccion de flancos
 	GPIOA->IBE = (1<<2)|(1<<3)|(1<<4)|(1<<5);   //Detección de ambos flancos
@@ -135,18 +138,29 @@ int main(void)
     TIMER0->TAILR = 0xFFFFFFFF;
     TIMER0->CTL = (1<<0);
 
-	while(1);
+	while(1){
+	    UARTSend("Canal 2 = %f \n", time[0]);
+	    UARTSend("Canal 3 = %f \n", time[1]);
+	    UARTSend("Canal 4 = %f \n", time[2]);
+	    UARTSend("Canal 5 = %f \n", time[3]);
+	    ROM_SysCtlDelay(5000000);
+	}
 }
 
 void IntGPIOAHandler(void){
-    uint32_t time = 0;
     if( (GPIOA->DATA & (1<<chanel) ) ){
         TIMER0->TAV = 0x00;
+        GPIOF->DATA |= (1<<1);
     }
     else{
-        time = TIMER0->TAR;
-        UARTSend("Tiempo = %d\n",time);
-        GPIOA->IM = (1<<chanel);
+        time[chanel-2] = (float)TIMER0->TAR / 40;
+        if(chanel == 5){
+                    chanel = 1;
+                }
+        chanel++;
+        GPIOF->DATA &= ~(1<<1);
     }
-    GPIOA->ICR = (1<<chanel);
+    GPIOA->ICR = (1<<2)|(1<<3)|(1<<4)|(1<<5);
+    GPIOA->IM = (1<<chanel);
+    ROM_IntPendClear(INT_GPIOA);
 }
