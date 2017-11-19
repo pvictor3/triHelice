@@ -12,6 +12,10 @@ GEN_CMDS__FLAG :=
 ORDERED_OBJS += \
 "./main.obj" \
 "./tm4c123gh6pm_startup_ccs.obj" \
+"./Drivers/gpioAReceiver.obj" \
+"./Drivers/pwm.obj" \
+"./Drivers/timer.obj" \
+"./Utils/uartPrint.obj" \
 "C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/ccs/Debug/driverlib.lib" \
 "../tm4c123gh6pm.cmd" \
 $(GEN_CMDS__FLAG) \
@@ -25,7 +29,11 @@ RMDIR := RMDIR /S/Q
 # All of the sources participating in the build are defined here
 -include sources.mk
 -include subdir_vars.mk
+-include Drivers/subdir_vars.mk
+-include Utils/subdir_vars.mk
 -include subdir_rules.mk
+-include Drivers/subdir_rules.mk
+-include Utils/subdir_rules.mk
 -include objects.mk
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -155,8 +163,8 @@ triHelice.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "tm4c123gh6pm_startup_ccs.obj" 
-	-$(RM) "main.d" "tm4c123gh6pm_startup_ccs.d" 
+	-$(RM) "main.obj" "tm4c123gh6pm_startup_ccs.obj" "Drivers\gpioAReceiver.obj" "Drivers\pwm.obj" "Drivers\timer.obj" "Utils\uartPrint.obj" 
+	-$(RM) "main.d" "tm4c123gh6pm_startup_ccs.d" "Drivers\gpioAReceiver.d" "Drivers\pwm.d" "Drivers\timer.d" "Utils\uartPrint.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

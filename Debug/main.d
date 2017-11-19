@@ -8,6 +8,10 @@ main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/stdio.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/linkage.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/stdarg.h
 main.obj: ../CMSIS.h
+main.obj: ../drivers/pwm.h
+main.obj: ../drivers/gpioAReceiver.h
+main.obj: ../drivers/timer.h
+main.obj: ../utils/uartPrint.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/inc/tm4c123gh6pm.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/inc/hw_memmap.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/inc/hw_types.h
@@ -26,6 +30,10 @@ C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/stdio.h:
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/linkage.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_16.9.3.LTS/include/stdarg.h: 
 ../CMSIS.h: 
+../drivers/pwm.h: 
+../drivers/gpioAReceiver.h: 
+../drivers/timer.h: 
+../utils/uartPrint.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/inc/tm4c123gh6pm.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/inc/hw_memmap.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/inc/hw_types.h: 
