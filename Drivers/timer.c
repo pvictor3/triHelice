@@ -9,12 +9,12 @@
 
 void timerConfig(void){
     /*
-     * Configuracion del timer
+     * Configuracion del timer de 32bits para contar microsegundos
      * */
-    SYSCTL->RCGCTIMER = 0x01;
-    TIMER0->CTL = 0x00;
-    TIMER0->CFG = 0x00;
-    TIMER0->TAMR = (1<<1)|(1<<4);
-    TIMER0->TAILR = 0xFFFFFFFF;
-    TIMER0->CTL = (1<<0);
+    WTIMER0->CTL = 0x00;                //Desactiva el timer
+    WTIMER0->CFG = 0x04;                //Seleccionamos el timer de 32bits
+    WTIMER0->TAMR = (0x02)|(1<<4);      //Timer Periodic and counting up
+    WTIMER0->TAILR = 0xFFFFFFFF;        //Limite superior
+    WTIMER0->TAPR = 40;                 //Preescaler para contar cada microsegundo
+    WTIMER0->CTL = 0x01;                //Inicia el timer
 }

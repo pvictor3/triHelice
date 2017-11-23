@@ -11,6 +11,8 @@
 
 void pwmInit(void);
 
+void changeDuty(uint8_t salida, uint32_t valor);
+
 
 
 #endif /* DRIVERS_PWM_H_ */

@@ -30,5 +30,10 @@
 			<type>1</type>
 			<locationURI>TIVAWARE_INSTALL/driverlib/ccs/Debug/driverlib.lib</locationURI>
 		</link>
+		<link>
+			<name>sensorlib.lib</name>
+			<type>1</type>
+			<locationURI>TIVAWARE_INSTALL/sensorlib/ccs/Debug/sensorlib.lib</locationURI>
+		</link>
 	</linkedResources>
 </projectDescription>

@@ -159,6 +159,47 @@ typedef struct {                                    /*!< TIMER0 Structure       
 } TIMER0_Type;
 
 /* ================================================================================ */
+/* ================                     WTIMER0                    ================ */
+/* ================================================================================ */
+
+
+/**
+  * @brief Register map for WTIMER0 peripheral (WTIMER0)
+  */
+
+typedef struct {                                    /*!< WTIMER0 Structure                                                     */
+  __IO uint32_t  CFG;                               /*!< GPTM Configuration                                                    */
+  __IO uint32_t  TAMR;                              /*!< GPTM Timer A Mode                                                     */
+  __IO uint32_t  TBMR;                              /*!< GPTM Timer B Mode                                                     */
+  __IO uint32_t  CTL;                               /*!< GPTM Control                                                          */
+  __IO uint32_t  SYNC;                              /*!< GPTM Synchronize                                                      */
+  __I  uint32_t  RESERVED0;
+  __IO uint32_t  IMR;                               /*!< GPTM Interrupt Mask                                                   */
+  __IO uint32_t  RIS;                               /*!< GPTM Raw Interrupt Status                                             */
+  __IO uint32_t  MIS;                               /*!< GPTM Masked Interrupt Status                                          */
+  __O  uint32_t  ICR;                               /*!< GPTM Interrupt Clear                                                  */
+  __IO uint32_t  TAILR;                             /*!< GPTM Timer A Interval Load                                            */
+  __IO uint32_t  TBILR;                             /*!< GPTM Timer B Interval Load                                            */
+  __IO uint32_t  TAMATCHR;                          /*!< GPTM Timer A Match                                                    */
+  __IO uint32_t  TBMATCHR;                          /*!< GPTM Timer B Match                                                    */
+  __IO uint32_t  TAPR;                              /*!< GPTM Timer A Prescale                                                 */
+  __IO uint32_t  TBPR;                              /*!< GPTM Timer B Prescale                                                 */
+  __IO uint32_t  TAPMR;                             /*!< GPTM TimerA Prescale Match                                            */
+  __IO uint32_t  TBPMR;                             /*!< GPTM TimerB Prescale Match                                            */
+  __IO uint32_t  TAR;                               /*!< GPTM Timer A                                                          */
+  __IO uint32_t  TBR;                               /*!< GPTM Timer B                                                          */
+  __IO uint32_t  TAV;                               /*!< GPTM Timer A Value                                                    */
+  __IO uint32_t  TBV;                               /*!< GPTM Timer B Value                                                    */
+  __IO uint32_t  RTCPD;                             /*!< GPTM RTC Predivide                                                    */
+  __IO uint32_t  TAPS;                              /*!< GPTM Timer A Prescale Snapshot                                        */
+  __IO uint32_t  TBPS;                              /*!< GPTM Timer B Prescale Snapshot                                        */
+  __IO uint32_t  TAPV;                              /*!< GPTM Timer A Prescale Value                                           */
+  __IO uint32_t  TBPV;                              /*!< GPTM Timer B Prescale Value                                           */
+  __I  uint32_t  RESERVED1[981];
+  __IO uint32_t  PP;                                /*!< GPTM Peripheral Properties                                            */
+} WTIMER0_Type;
+
+/* ================================================================================ */
 /* ================                      GPIOA                     ================ */
 /* ================================================================================ */
 
@@ -405,20 +446,24 @@ typedef struct {                                    /*!< SYSCTL Structure       
 /* ================================================================================ */
 #define SYSCTL_BASE                     0x400FE000UL
 #define GPIOA_BASE                      0x40004000UL
+#define GPIOC_BASE                      0x40006000UL
 #define GPIOF_BASE                      0x40025000UL
 #define PWM0_BASE                       0x40028000UL
 #define PWM1_BASE                       0x40029000UL
 #define TIMER0_BASE                     0x40030000UL
+#define WTIMER0_BASE                    0x40036000UL
 
 /* ================================================================================ */
 /* ================             Peripheral declaration             ================ */
 /* ================================================================================ */
 #define GPIOF                           ((GPIOA_Type              *) GPIOF_BASE)
 #define GPIOA                           ((GPIOA_Type              *) GPIOA_BASE)
+#define GPIOC                           ((GPIOA_Type              *) GPIOC_BASE)
 #define PWM0                            ((PWM0_Type               *) PWM0_BASE)
 #define PWM1                            ((PWM0_Type               *) PWM1_BASE)
 #define SYSCTL                          ((SYSCTL_Type             *) SYSCTL_BASE)
 #define TIMER0                          ((TIMER0_Type             *) TIMER0_BASE)
+#define WTIMER0                         ((WTIMER0_Type            *) WTIMER0_BASE)
 
 
 
