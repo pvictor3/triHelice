@@ -8,7 +8,7 @@ void pwmInit(void){
     GPIOF->DIR |= (1 << 3) | (1 << 2);                  //PF2 y PF3 como salidas
     GPIOF->AFSEL |= (1 << 2) | (1 << 3);                //Alternate function para PF2 y PF3
     GPIOF->PCTL |= (5 << 8) | (5 << 12);                //Codigo(5) para usar como PWM
-    GPIOF->DEN |= (1 << 3) | (1 << 2) | (1 << 1);       //Digital Enable
+    GPIOF->DEN |= (1 << 3) | (1 << 2);       //Digital Enable
 
     SYSCTL->RCC |= (1 << 20);                           //Activa el divisor del system clock para el PWM
     SYSCTL->RCC &= ~(7 << 17);                          //Pone al divisor en 2, frecuencia de 20MHz

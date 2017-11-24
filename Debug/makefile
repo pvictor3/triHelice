@@ -12,6 +12,7 @@ GEN_CMDS__FLAG :=
 ORDERED_OBJS += \
 "./main.obj" \
 "./tm4c123gh6pm_startup_ccs.obj" \
+"./uartstdio.obj" \
 "./Drivers/gpioAReceiver.obj" \
 "./Drivers/pwm.obj" \
 "./Drivers/timer.obj" \
@@ -164,8 +165,8 @@ triHelice.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "tm4c123gh6pm_startup_ccs.obj" "Drivers\gpioAReceiver.obj" "Drivers\pwm.obj" "Drivers\timer.obj" "Utils\uartPrint.obj" 
-	-$(RM) "main.d" "tm4c123gh6pm_startup_ccs.d" "Drivers\gpioAReceiver.d" "Drivers\pwm.d" "Drivers\timer.d" "Utils\uartPrint.d" 
+	-$(RM) "main.obj" "tm4c123gh6pm_startup_ccs.obj" "uartstdio.obj" "Drivers\gpioAReceiver.obj" "Drivers\pwm.obj" "Drivers\timer.obj" "Utils\uartPrint.obj" 
+	-$(RM) "main.d" "tm4c123gh6pm_startup_ccs.d" "uartstdio.d" "Drivers\gpioAReceiver.d" "Drivers\pwm.d" "Drivers\timer.d" "Utils\uartPrint.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

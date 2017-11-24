@@ -16,6 +16,9 @@
 #include "driverlib/gpio.h"
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/comp_dcm.h"
+#include "sensorlib/mpu6050.h"
+#include "sensorlib/hw_mpu6050.h"
+#include "utils/uartstdio.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
@@ -25,12 +28,14 @@ uint_fast8_t MPU9250Init(tI2CMInstance *psI2CInst, uint_fast8_t ui8I2CAddr);
 uint_fast8_t MPU9250Read(uint_fast8_t ui8Reg, uint8_t *pui8Data, uint_fast16_t ui16Count);
 uint_fast8_t MPU9250Write(uint8_t *pui8Data, uint_fast16_t ui16Count);
 
-uint32_t ultimoValorCanal2, ultimoValorCanal3, ultimoValorCanal4, ultimoValorCanal5 = 0;
+uint32_t ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
 uint32_t tiempo2, tiempo3, tiempo4, tiempo5;
 uint32_t tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
 uint32_t ui32CompDCMStarted;
 
 uint8_t pui8Buffer[6];
+
+
 
 //*****************************************************************************
 //
@@ -49,7 +54,7 @@ tCompDCM g_sCompDCMInst;
 //
 // A boolean that is set when an I2C transaction is completed.
 //
-volatile bool g_bI2CMSimpleDone = true;
+volatile bool g_bI2CMSimpleDone = false;
 
 //
 // The function that is provided by this example as a callback when I2C
@@ -75,9 +80,10 @@ g_bI2CMSimpleDone = true;
 
 int main(void)
 {
-    uint8_t pfData_int[12];
+    uint8_t pfData_int[14];
     float pfData[12];
     float *pfAccel, *pfGyro, *pfMag, *pfEulers;
+    int i;
 
     //
     // Initialize convenience pointers that clean up and clarify the code
@@ -94,13 +100,13 @@ int main(void)
 
 	//Activa los periféricos a utilizar
 	SYSCTL->RCGC2 |= (1<<5)|(1<<3)|(1<<2)|(1<<0);       //Activa el reloj para GPIOA, GPIOC, GPIOD, GPIOF
-	SYSCTL->RCGCPWM = (1<<1)|(1<<0);                    //Activa el reloj para PWM MODULE 1 y MODULE 0
-	SYSCTL->RCGCWTIMER = (1<<0);                        //Activa el timer 0 de 32bits
-	SYSCTL->RCGCI2C = (1<<1);                           //Activa I2C modulo 3
+	SYSCTL->RCGCPWM |= (1<<1)|(1<<0);                    //Activa el reloj para PWM MODULE 1 y MODULE 0
+	SYSCTL->RCGCWTIMER |= (1<<0);                        //Activa el timer 0 de 32bits
+	SYSCTL->RCGCI2C |= (1<<1);                           //Activa I2C modulo 1
 
 	//
 	// Inicializa las 3 salidas PWM a 8KHz
-	//
+	//  PF2, PF3, PC4
 	pwmInit();
 
 	//
@@ -127,6 +133,9 @@ int main(void)
     //Configura la UART0 para debug
     //
     UARTConfig();
+    UARTprintf("\033[H\033[2J");
+    UARTprintf("Flight Controller!!! \n");
+    UARTprintf("Inicializando perifericos...\n");
 
     //Configura el I2C
     ROM_GPIOPinConfigure(GPIO_PA6_I2C1SCL);
@@ -142,9 +151,19 @@ int main(void)
 
     I2CMInit(&g_sI2CInst, I2C1_BASE, INT_I2C1, 0xff, 0xff, SysCtlClockGet());
 
-    MPU9250Init(&g_sI2CInst, MPU9150_I2C_ADDRESS);
+    //MPU6050 EXAMPLE
+    for(i = 0; i < 14; i++){
+        pfData_int[i] = 3;
+    }
+    pui8Buffer[0] = 0x6B;
+    pui8Buffer[1] = 0x00;
+    I2CMWrite(&g_sI2CInst, 0x68, pui8Buffer, 2, I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
 
-    MPU9250Write(pui8Buffer, 2); //The first byte is the register addresss
+    //MPU9250Init(&g_sI2CInst, MPU9150_I2C_ADDRESS);
+
+    //MPU9250Write(pui8Buffer, 2); //The first byte is the register addresss
 
     //
     // Initialize the DCM system. 50 hz sample rate.
@@ -153,8 +172,25 @@ int main(void)
     CompDCMInit(&g_sCompDCMInst, 1.0f / 50.0f, 0.2f, 0.6f, 0.2f);
 
     ui32CompDCMStarted = 0;
+    UARTprintf("Inicializacion completa!!!");
 	while(1){
-	    MPU9250Read(0x3B, pfData_int, 12);
+	    pui8Buffer[0] = 0x3B;
+	        I2CMRead(&g_sI2CInst, 0x68, pui8Buffer, 1, pfData_int, 14,
+	                        I2CMSimpleCallback, 0);
+	        while(!g_bI2CMSimpleDone);
+	        g_bI2CMSimpleDone = false;
+
+	        UARTprintf("acX = %d \n", (pfData_int[0] << 8) | pfData_int[1]);
+	        UARTprintf("acY = %d \n", (pfData_int[2] << 8) | pfData_int[3]);
+	        UARTprintf("acZ = %d \n", (pfData_int[4] << 8) | pfData_int[5]);
+	        UARTprintf("temp = %d \n", (pfData_int[6] << 8) | pfData_int[7]);
+	        UARTprintf("gyX = %d \n", (pfData_int[8] << 8) | pfData_int[9]);
+	        UARTprintf("gyY = %d \n", (pfData_int[10] << 8) | pfData_int[11]);
+	        UARTprintf("gyZ = %d \n", (pfData_int[12] << 8) | pfData_int[13]);
+
+
+
+	    //MPU9250Read(0x3B, pfData_int, 12);
 
         //
         // Get floating point version of the Accel Data in m/s^2.
@@ -326,9 +362,7 @@ void UARTConfig(void){
     //
     // Configure the UART for 115,200, 8-N-1 operation.
     //
-    ROM_UARTConfigSetExpClk(UART0_BASE, ROM_SysCtlClockGet(), 115200,
-                            (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
-                                    UART_CONFIG_PAR_NONE));
+    UARTStdioConfig(0, 115200, 40000000);
 }
 
 void IntGPIOAHandler(void){
@@ -347,7 +381,7 @@ void IntGPIOAHandler(void){
     }
     else if(ultimoValorCanal2 == 1){
         ultimoValorCanal2 = 0;
-        tiempoCanal2 = currentTime - tiempo2;
+        tiempoCanal2 = tiempo2 - currentTime;
         GPIOA->ICR = (1 << 2);
     }
 
@@ -363,7 +397,7 @@ void IntGPIOAHandler(void){
     }
     else if(ultimoValorCanal3 == 1){
         ultimoValorCanal3 = 0;
-        tiempoCanal3 = currentTime - tiempo3;
+        tiempoCanal3 = tiempo3 - currentTime;
         GPIOA->ICR = (1 << 3);
     }
 
@@ -379,7 +413,7 @@ void IntGPIOAHandler(void){
     }
     else if(ultimoValorCanal4 == 1){
         ultimoValorCanal4 = 0;
-        tiempoCanal4 = currentTime - tiempo4;
+        tiempoCanal4 = tiempo4 - currentTime;
         GPIOA->ICR = (1 << 4);
     }
 
@@ -395,7 +429,7 @@ void IntGPIOAHandler(void){
     }
     else if(ultimoValorCanal5 == 1){
         ultimoValorCanal5 = 0;
-        tiempoCanal5 = currentTime - tiempo5;
+        tiempoCanal5 = tiempo5 - currentTime;
         GPIOA->ICR = (1 << 5);
     }
 }
