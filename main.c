@@ -99,20 +99,30 @@ int main(void)
 	ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
 
 	//Activa los periféricos a utilizar
-	SYSCTL->RCGC2 |= (1<<5)|(1<<3)|(1<<2)|(1<<0);       //Activa el reloj para GPIOA, GPIOC, GPIOD, GPIOF
-	SYSCTL->RCGCPWM |= (1<<1)|(1<<0);                    //Activa el reloj para PWM MODULE 1 y MODULE 0
-	SYSCTL->RCGCWTIMER |= (1<<0);                        //Activa el timer 0 de 32bits
-	SYSCTL->RCGCI2C |= (1<<1);                           //Activa I2C modulo 1
+	SYSCTL->RCGC2 |= (1<<5)|(1<<4)|(1<<3)|(1<<2)|(1<<0);        //Activa el reloj para GPIOA, GPIOC, GPIOD, GPIOE,GPIOF
+	SYSCTL->RCGCPWM |= (1<<1)|(1<<0);                           //Activa el reloj para PWM MODULE 1 y MODULE 0
+	SYSCTL->RCGCWTIMER |= (1<<0);                               //Activa el timer 0 de 32bits
+	SYSCTL->RCGCI2C |= (1<<1);                                  //Activa I2C modulo 1
 
 	//
-	// Inicializa las 3 salidas PWM a 8KHz
-	//  PF2, PF3, PC4
+	//Configura la UART0 para debug
+	//
+	UARTConfig();
+	UARTprintf("\033[H\033[2J");
+	UARTprintf("Flight Controller!!! \n");
+	UARTprintf("Inicializando perifericos...\n");
+
+	//
+	// Inicializa las 3 salidas PWM a 50Hz
+	//  PE5, PC4, PC5
 	pwmInit();
+	UARTprintf("PWM Iniciado \n");
 
 	//
 	//Inicializa el GPIOA para generar una interrupcion en ambos flancos
 	//
 	gpioAConfig();
+	UARTprintf("GPIOA Iniciado \n");
 
     //
     // Enable the GPIOA interrupt.
@@ -128,14 +138,9 @@ int main(void)
     //Inicializa el timer de 32bits para contar microsegundos
     //
     timerConfig();
+    UARTprintf("Timer Iniciado \n");
 
-    //
-    //Configura la UART0 para debug
-    //
-    UARTConfig();
-    UARTprintf("\033[H\033[2J");
-    UARTprintf("Flight Controller!!! \n");
-    UARTprintf("Inicializando perifericos...\n");
+
 
     //Configura el I2C
     ROM_GPIOPinConfigure(GPIO_PA6_I2C1SCL);
@@ -150,20 +155,17 @@ int main(void)
     ROM_IntMasterEnable();
 
     I2CMInit(&g_sI2CInst, I2C1_BASE, INT_I2C1, 0xff, 0xff, SysCtlClockGet());
+    UARTprintf("I2C Iniciado \n");
 
-    //MPU6050 EXAMPLE
+    //MPU9250 Reset
     for(i = 0; i < 14; i++){
         pfData_int[i] = 3;
     }
-    pui8Buffer[0] = 0x6B;
-    pui8Buffer[1] = 0x00;
+    pui8Buffer[0] = 0x6B;   //PWR_MGMT_1 address
+    pui8Buffer[1] = 0x80;   //Reset
     I2CMWrite(&g_sI2CInst, 0x68, pui8Buffer, 2, I2CMSimpleCallback, 0);
     while(!g_bI2CMSimpleDone);
     g_bI2CMSimpleDone = false;
-
-    //MPU9250Init(&g_sI2CInst, MPU9150_I2C_ADDRESS);
-
-    //MPU9250Write(pui8Buffer, 2); //The first byte is the register addresss
 
     //
     // Initialize the DCM system. 50 hz sample rate.
@@ -174,27 +176,19 @@ int main(void)
     ui32CompDCMStarted = 0;
     UARTprintf("Inicializacion completa!!!");
 	while(1){
-	    pui8Buffer[0] = 0x3B;
-	        I2CMRead(&g_sI2CInst, 0x68, pui8Buffer, 1, pfData_int, 14,
-	                        I2CMSimpleCallback, 0);
-	        while(!g_bI2CMSimpleDone);
-	        g_bI2CMSimpleDone = false;
+	    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
+	    I2CMRead(&g_sI2CInst, 0x68, pui8Buffer, 1, pfData_int, 14,
+	             I2CMSimpleCallback, 0);
+	    while(!g_bI2CMSimpleDone);
+	    g_bI2CMSimpleDone = false;
 
-	        UARTprintf("acX = %d \n", (pfData_int[0] << 8) | pfData_int[1]);
-	        UARTprintf("acY = %d \n", (pfData_int[2] << 8) | pfData_int[3]);
-	        UARTprintf("acZ = %d \n", (pfData_int[4] << 8) | pfData_int[5]);
-	        UARTprintf("temp = %d \n", (pfData_int[6] << 8) | pfData_int[7]);
-	        UARTprintf("gyX = %d \n", (pfData_int[8] << 8) | pfData_int[9]);
-	        UARTprintf("gyY = %d \n", (pfData_int[10] << 8) | pfData_int[11]);
-	        UARTprintf("gyZ = %d \n", (pfData_int[12] << 8) | pfData_int[13]);
-
-
-
-	    //MPU9250Read(0x3B, pfData_int, 12);
-
-        //
-        // Get floating point version of the Accel Data in m/s^2.
-        //
+	    UARTprintf("acX = %d \n", (pfData_int[0] << 8) | pfData_int[1]);
+	    UARTprintf("acY = %d \n", (pfData_int[2] << 8) | pfData_int[3]);
+	    UARTprintf("acZ = %d \n", (pfData_int[4] << 8) | pfData_int[5]);
+	    UARTprintf("temp = %d \n", (pfData_int[6] << 8) | pfData_int[7]);
+	    UARTprintf("gyX = %d \n", (pfData_int[8] << 8) | pfData_int[9]);
+	    UARTprintf("gyY = %d \n", (pfData_int[10] << 8) | pfData_int[11]);
+	    UARTprintf("gyZ = %d \n", (pfData_int[12] << 8) | pfData_int[13]);
 
 	    //
 	    // Check if this is our first data ever.

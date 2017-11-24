@@ -447,6 +447,7 @@ typedef struct {                                    /*!< SYSCTL Structure       
 #define SYSCTL_BASE                     0x400FE000UL
 #define GPIOA_BASE                      0x40004000UL
 #define GPIOC_BASE                      0x40006000UL
+#define GPIOE_BASE                      0x40024000UL
 #define GPIOF_BASE                      0x40025000UL
 #define PWM0_BASE                       0x40028000UL
 #define PWM1_BASE                       0x40029000UL
@@ -459,6 +460,7 @@ typedef struct {                                    /*!< SYSCTL Structure       
 #define GPIOF                           ((GPIOA_Type              *) GPIOF_BASE)
 #define GPIOA                           ((GPIOA_Type              *) GPIOA_BASE)
 #define GPIOC                           ((GPIOA_Type              *) GPIOC_BASE)
+#define GPIOE                           ((GPIOA_Type              *) GPIOE_BASE)
 #define PWM0                            ((PWM0_Type               *) PWM0_BASE)
 #define PWM1                            ((PWM0_Type               *) PWM1_BASE)
 #define SYSCTL                          ((SYSCTL_Type             *) SYSCTL_BASE)
