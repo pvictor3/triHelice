@@ -58,6 +58,7 @@ extern uint32_t __STACK_TOP;
 
 extern void IntGPIOAHandler(void);
 extern void I2CMSimpleIntHandler(void);
+extern void SchedulerSysTickIntHandler(void);
 
 //*****************************************************************************
 //
@@ -85,7 +86,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // Debug monitor handler
     0,                                      // Reserved
     IntDefaultHandler,                      // The PendSV handler
-    IntDefaultHandler,                      // The SysTick handler
+    SchedulerSysTickIntHandler,                      // The SysTick handler
     IntGPIOAHandler,                      // GPIO Port A
     IntDefaultHandler,                      // GPIO Port B
     IntDefaultHandler,                      // GPIO Port C

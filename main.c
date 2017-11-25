@@ -19,6 +19,7 @@
 #include "sensorlib/mpu6050.h"
 #include "sensorlib/hw_mpu6050.h"
 #include "utils/uartstdio.h"
+#include "utils/scheduler.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
@@ -35,7 +36,43 @@ uint32_t ui32CompDCMStarted;
 
 uint8_t pui8Buffer[6];
 
+uint32_t g_ui32SchedulerNumTasks = 1;
 
+//*****************************************************************************
+//
+// Definition of the system tick rate. This results in a tick period of 10mS.
+//
+//*****************************************************************************
+#define TICKS_PER_SECOND 100
+
+//*****************************************************************************
+//
+// Prototypes of functions which will be called by the scheduler.
+//
+//*****************************************************************************
+static void readData(void *pvParam);
+
+//*****************************************************************************
+//
+// This table defines all the tasks that the scheduler is to run, the periods
+// between calls to those tasks, and the parameter to pass to the task.
+//
+//*****************************************************************************
+tSchedulerTask g_psSchedulerTable[] =
+{
+//
+// Read data every 2 ticks (50 per second).
+//
+{ readData, (void *)0, 2, 0, true},
+};
+
+//*****************************************************************************
+//
+// The number of entries in the global scheduler task table.
+//
+//*****************************************************************************
+unsigned long g_ulSchedulerNumTasks = (sizeof(g_psSchedulerTable) /
+sizeof(tSchedulerTask));
 
 //*****************************************************************************
 //
@@ -77,10 +114,10 @@ if(ui8Status != I2CM_STATUS_SUCCESS)
 //
 g_bI2CMSimpleDone = true;
 }
-
+uint8_t pfData_int[14];
 int main(void)
 {
-    uint8_t pfData_int[14];
+
     float pfData[12];
     float *pfAccel, *pfGyro, *pfMag, *pfEulers;
     int i;
@@ -100,7 +137,7 @@ int main(void)
 
 	//Activa los periféricos a utilizar
 	SYSCTL->RCGC2 |= (1<<5)|(1<<4)|(1<<3)|(1<<2)|(1<<0);        //Activa el reloj para GPIOA, GPIOC, GPIOD, GPIOE,GPIOF
-	SYSCTL->RCGCPWM |= (1<<1)|(1<<0);                           //Activa el reloj para PWM MODULE 1 y MODULE 0
+	SYSCTL->RCGCPWM |= (1<<0);                           //Activa el reloj para PWM MODULE 1 y MODULE 0
 	SYSCTL->RCGCWTIMER |= (1<<0);                               //Activa el timer 0 de 32bits
 	SYSCTL->RCGCI2C |= (1<<1);                                  //Activa I2C modulo 1
 
@@ -113,7 +150,7 @@ int main(void)
 	UARTprintf("Inicializando perifericos...\n");
 
 	//
-	// Inicializa las 3 salidas PWM a 50Hz
+	// Inicializa las 3 salidas PWM0 a 50Hz
 	//  PE5, PC4, PC5
 	pwmInit();
 	UARTprintf("PWM Iniciado \n");
@@ -172,15 +209,25 @@ int main(void)
     // accel weight = .2, gyro weight = .8, mag weight = .2
     //
     CompDCMInit(&g_sCompDCMInst, 1.0f / 50.0f, 0.2f, 0.6f, 0.2f);
-
     ui32CompDCMStarted = 0;
+
+    //
+    // Initialize the task scheduler and configure the SysTick to interrupt
+    // 100 times per second.
+    //
+    SchedulerInit(TICKS_PER_SECOND);
+
+    SchedulerTaskEnable(0,true);
+
+
     UARTprintf("Inicializacion completa!!!");
 	while(1){
-	    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
-	    I2CMRead(&g_sI2CInst, 0x68, pui8Buffer, 1, pfData_int, 14,
-	             I2CMSimpleCallback, 0);
-	    while(!g_bI2CMSimpleDone);
-	    g_bI2CMSimpleDone = false;
+
+	    //
+	    // Tell the scheduler to call any periodic tasks that are due to be
+	    // called.
+	    //
+	    SchedulerRun();
 
 	    UARTprintf("acX = %d \n", (pfData_int[0] << 8) | pfData_int[1]);
 	    UARTprintf("acY = %d \n", (pfData_int[2] << 8) | pfData_int[3]);
@@ -223,6 +270,14 @@ int main(void)
 	    }
 
 	}
+}
+
+static void readData(void *pvParam){
+    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
+    I2CMRead(&g_sI2CInst, 0x68, pui8Buffer, 1, pfData_int, 14,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
 }
 
 //*****************************************************************************

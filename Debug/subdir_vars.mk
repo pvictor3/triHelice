@@ -14,31 +14,37 @@ C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/ccs/Debug/sensorlib.lib
 
 C_SRCS += \
 ../main.c \
+C:/ti/TivaWare_C_Series-2.1.4.178/utils/scheduler.c \
 ../tm4c123gh6pm_startup_ccs.c \
 C:/ti/TivaWare_C_Series-2.1.4.178/utils/uartstdio.c 
 
 C_DEPS += \
 ./main.d \
+./scheduler.d \
 ./tm4c123gh6pm_startup_ccs.d \
 ./uartstdio.d 
 
 OBJS += \
 ./main.obj \
+./scheduler.obj \
 ./tm4c123gh6pm_startup_ccs.obj \
 ./uartstdio.obj 
 
 OBJS__QUOTED += \
 "main.obj" \
+"scheduler.obj" \
 "tm4c123gh6pm_startup_ccs.obj" \
 "uartstdio.obj" 
 
 C_DEPS__QUOTED += \
 "main.d" \
+"scheduler.d" \
 "tm4c123gh6pm_startup_ccs.d" \
 "uartstdio.d" 
 
 C_SRCS__QUOTED += \
 "../main.c" \
+"C:/ti/TivaWare_C_Series-2.1.4.178/utils/scheduler.c" \
 "../tm4c123gh6pm_startup_ccs.c" \
 "C:/ti/TivaWare_C_Series-2.1.4.178/utils/uartstdio.c" 
 
