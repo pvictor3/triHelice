@@ -36,7 +36,7 @@ uint32_t ui32CompDCMStarted;
 
 uint8_t pui8Buffer[6];
 
-uint32_t g_ui32SchedulerNumTasks = 1;
+uint32_t g_ui32SchedulerNumTasks = 2;
 
 //*****************************************************************************
 //
@@ -51,6 +51,7 @@ uint32_t g_ui32SchedulerNumTasks = 1;
 //
 //*****************************************************************************
 static void updateDCM(void *pvParam);
+static void printData(void *pvParam);
 
 //*****************************************************************************
 //
@@ -64,6 +65,7 @@ tSchedulerTask g_psSchedulerTable[] =
 // Update data every 2 ticks (50 per second).
 //
 { updateDCM, (void *)0, 2, 0, true},
+{ printData, (void *)0, 50, 0, true},
 };
 
 //*****************************************************************************
@@ -202,24 +204,44 @@ int main(void)
     UARTprintf("I2C Iniciado \n");
 
     //MPU9250 Reset
-    for(i = 0; i < 14; i++){
-        pfData_int[i] = 0;
-    }
     pui8Buffer[0] = 0x6B;   //PWR_MGMT_1 address
     pui8Buffer[1] = 0x80;   //Reset
     I2CMWrite(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 2, I2CMSimpleCallback, 0);
-    //while(!g_bI2CMSimpleDone);
+    while(!g_bI2CMSimpleDone);
     g_bI2CMSimpleDone = false;
-
     UARTprintf("Acelerometro y Giroscopio Iniciado \n");
 
     //Magnetometro Mode 3 (100Hz)
+    pui8Buffer[0] = 0x37;   //INT_PIN_CFG
+    pui8Buffer[1] = 0x02;   //BYPASS_EN
+    I2CMWrite(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 2, I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+
     pui8Buffer[0] = 0x0A;   //CNTL1
-    pui8Buffer[1] = 0x06;   //Continuos measurement mode 2 (100hz)
+    pui8Buffer[1] = 0x06;   //Continous measurement mode
     I2CMWrite(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 2, I2CMSimpleCallback, 0);
-    //while(!g_bI2CMSimpleDone);
+    while(!g_bI2CMSimpleDone);
     g_bI2CMSimpleDone = false;
     UARTprintf("Magnetometro iniciado \n");
+
+    pui8Buffer[0] = 0x75;   //WHO AM I
+    I2CMRead(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 1, pfData_int, 1,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+    UARTprintf("Yo soy %X \n", pfData_int[0]);
+
+    if(pfData_int[0] != 0x71) return 0;
+
+    pui8Buffer[0] = 0x00;   //WHO AM I
+    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int, 1,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+    UARTprintf("Yo soy %X \n", pfData_int[0]);
+
+    if(pfData_int[0] != 0x48) return 0;
 
     //
     // Initialize the DCM system. 50 hz sample rate.
@@ -232,6 +254,7 @@ int main(void)
     //Activa las tareas a ejecutar por el scheduler
     //
     SchedulerTaskEnable(0,true);
+    SchedulerTaskEnable(1,true);
     UARTprintf("Scheduler Iniciado \n");
 
 
@@ -243,7 +266,7 @@ int main(void)
 	    // called.
 	    //
 	    SchedulerRun();
-/*
+
 	    //Read sensors data Acel and Gyro
 	    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
 	    I2CMRead(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 1, pfData_int, 14,
@@ -252,13 +275,13 @@ int main(void)
 	    g_bI2CMSimpleDone = false;
 
 	    //Read Magneto
-	    uint8_t ST1;
+/*	    uint8_t ST1;
 	    pui8Buffer[0] = 0x02;   //Status 1
 	    do{
 	        I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, &ST1, 1,
 	                 I2CMSimpleCallback,0);
 	    }while( !(ST1 & 0x01) ); //Data ready?
-	    g_bI2CMSimpleDone = false;
+	    g_bI2CMSimpleDone = false;*/
 
 	    pui8Buffer[0] = 0x03;
 	    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int_Mag, 6,
@@ -271,8 +294,88 @@ int main(void)
 	    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, &status2, 1,
 	             I2CMSimpleCallback, 0);
 	    while(!g_bI2CMSimpleDone);
+	    g_bI2CMSimpleDone = false;
+/*
+	    pui8Buffer[0] = 0x0A;   //CNTL1
+	    pui8Buffer[1] = 0x01;   //Single measurement mode
+	    I2CMWrite(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 2, I2CMSimpleCallback, 0);
+	    while(!g_bI2CMSimpleDone);
 	    g_bI2CMSimpleDone = false;*/
+
+	    pfAccel[0] = (int16_t)((pfData_int[0]<<8)|pfData_int[1]) * 0.0005985482;
+	    pfAccel[1] = (int16_t)((pfData_int[2]<<8)|pfData_int[3]) * 0.0005985482;
+	    pfAccel[2] = (int16_t)((pfData_int[4]<<8)|pfData_int[5]) * 0.0005985482;
+
+	    pfGyro[0] = (int16_t)((pfData_int[8]<<8)|pfData_int[9]) * 1.3323124e-4;
+	    pfGyro[1] = (int16_t)((pfData_int[10]<<8)|pfData_int[11]) * 1.3323124e-4;
+	    pfGyro[2] = (int16_t)((pfData_int[12]<<8)|pfData_int[13]) * 1.3323124e-4;
+
+	    pfMag[0] = (int16_t)((pfData_int_Mag[1]<<8)|pfData_int_Mag[0]) * 0.0000003;
+	    pfMag[1] = (int16_t)((pfData_int_Mag[3]<<8)|pfData_int_Mag[2]) * 0.0000003;
+	    pfMag[2] = (int16_t)((pfData_int_Mag[5]<<8)|pfData_int_Mag[4]) * 0.0000003;
+
+
+
 	}
+}
+
+static void printData(void *pvParam){
+    uint32_t ui32Idx;
+    int32_t i32IPart[12];
+    int32_t i32FPart[12];
+    pfMag[0] *= 1e6;
+    pfMag[1] *= 1e6;
+    pfMag[2] *= 1e6;
+    //
+    // Get Euler data. (Roll Pitch Yaw)
+    //
+    CompDCMComputeEulers(&g_sCompDCMInst, pfEulers, pfEulers + 1,
+                         pfEulers + 2);
+
+    //
+    // Convert Eulers to degrees. 180/PI = 57.29...
+    // Convert Yaw to 0 to 360 to approximate compass headings.
+    //
+    pfEulers[0] *= 57.295779513082320876798154814105f;
+    pfEulers[1] *= 57.295779513082320876798154814105f;
+    pfEulers[2] *= 57.295779513082320876798154814105f;
+    if(pfEulers[2] < 0)
+    {
+        pfEulers[2] += 360.0f;
+    }
+    for(ui32Idx = 0; ui32Idx < 12; ui32Idx++)
+                {
+                    //
+                    // Conver float value to a integer truncating the decimal part.
+                    //
+                    i32IPart[ui32Idx] = (int32_t) pfData[ui32Idx];
+
+                    //
+                    // Multiply by 1000 to preserve first three decimal values.
+                    // Truncates at the 3rd decimal place.
+                    //
+                    i32FPart[ui32Idx] = (int32_t) (pfData[ui32Idx] * 1000.0f);
+
+                    //
+                    // Subtract off the integer part from this newly formed decimal
+                    // part.
+                    //
+                    i32FPart[ui32Idx] = i32FPart[ui32Idx] -
+                                        (i32IPart[ui32Idx] * 1000);
+
+                    //
+                    // make the decimal part a positive number for display.
+                    //
+                    if(i32FPart[ui32Idx] < 0)
+                    {
+                        i32FPart[ui32Idx] *= -1;
+                    }
+                }
+   /* UARTprintf("Acel %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[0], i32FPart[0], i32IPart[1], i32FPart[1], i32IPart[2], i32FPart[2]);
+    UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
+    UARTprintf("Magn %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[6], i32FPart[6], i32IPart[7], i32FPart[7], i32IPart[8], i32FPart[8]);*/
+    UARTprintf("Euler %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
+    UARTprintf("Tiempo: %dms \n", SchedulerTickCountGet());
 }
 
 static void updateDCM(void *pvParam){
