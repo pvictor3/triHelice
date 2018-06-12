@@ -16,8 +16,6 @@
 #include "driverlib/gpio.h"
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/comp_dcm.h"
-#include "sensorlib/mpu6050.h"
-#include "sensorlib/hw_mpu6050.h"
 #include "utils/uartstdio.h"
 #include "utils/scheduler.h"
 
@@ -29,14 +27,14 @@
 
 void UARTConfig(void);
 
-uint32_t ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
-uint32_t tiempo2, tiempo3, tiempo4, tiempo5;
-uint32_t tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
+uint32_t ultimoValorCanal1=0, ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
+uint32_t tiempo1, tiempo2, tiempo3, tiempo4, tiempo5;
+uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
 uint32_t ui32CompDCMStarted;
 
 uint8_t pui8Buffer[6];
 
-uint32_t g_ui32SchedulerNumTasks = 2;
+uint32_t g_ui32SchedulerNumTasks = 4;
 
 //*****************************************************************************
 //
@@ -52,6 +50,8 @@ uint32_t g_ui32SchedulerNumTasks = 2;
 //*****************************************************************************
 static void updateDCM(void *pvParam);
 static void printData(void *pvParam);
+static void readSensors(void *pvParam);
+static void PIDAngulo(void *pvParam);
 
 //*****************************************************************************
 //
@@ -61,11 +61,10 @@ static void printData(void *pvParam);
 //*****************************************************************************
 tSchedulerTask g_psSchedulerTable[] =
 {
-//
-// Update data every 2 ticks (50 per second).
-//
+{ readSensors, (void *)0, 1, 0, true},
 { updateDCM, (void *)0, 2, 0, true},
 { printData, (void *)0, 50, 0, true},
+{ PIDAngulo, (void *)0, 10, 0, true},
 };
 
 //*****************************************************************************
@@ -122,8 +121,16 @@ uint8_t pfData_int_Mag[6];
 float pfData[12];
 float *pfAccel, *pfGyro, *pfMag, *pfEulers;
 int i;
+float angle;
 
+int32_t e[3], u[2];
+int32_t q0,q1,q2;
+uint32_t kp = 1, ti = 0, td = 0;
+uint32_t T = 0.1;
 
+int32_t ev[3], uv[2];
+int32_t qv0,qv1,qv2;
+uint32_t kpv = 1, tiv = 0, tdv = 0;
 
 int main(void)
 {
@@ -136,6 +143,26 @@ int main(void)
     pfGyro = pfData + 3;
     pfMag = pfData + 6;
     pfEulers = pfData + 9;
+
+    u[0] = 0;
+    e[0] = 0;
+    e[1] = 0;
+    //q0 = kp[1 + T/2ti + td/T]
+    //q1 = -kp[1 - T/2ti + 2td/T]
+    //q2 = kptd/T
+    q0 = kp * (1 + T / (2 * ti) + td / T);
+    q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
+    q2 = (kp * td) / T;
+
+    uv[0] = 0;
+    ev[0] = 0;
+    ev[1] = 0;
+    //q0 = kp[1 + T/2ti + td/T]
+    //q1 = -kp[1 - T/2ti + 2td/T]
+    //q2 = kptd/T
+    qv0 = kpv * (1 + T / (2 * tiv) + tdv / T);
+    qv1 = -kpv * (1 - T / (2 * tiv) + (2 * tdv) / T);
+    qv2 = (kpv * tdv) / T;
 
     //System clock = 40MHZ
 	ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
@@ -176,16 +203,6 @@ int main(void)
 	//
 	gpioAConfig();
 	UARTprintf("GPIOA Iniciado \n");
-
-    //
-    // Enable the GPIOA interrupt.
-    //
-    ROM_IntEnable(INT_GPIOA);
-
-    //
-    // Enable the GPIOF interrupt.
-    //
-    ROM_IntEnable(INT_GPIOF);
 
     //
     //Inicializa el timer de 32bits para contar microsegundos
@@ -255,77 +272,96 @@ int main(void)
     //
     SchedulerTaskEnable(0,true);
     SchedulerTaskEnable(1,true);
+    SchedulerTaskEnable(2,true);
+    SchedulerTaskEnable(3,true);
     UARTprintf("Scheduler Iniciado \n");
 
 
     UARTprintf("Inicializacion completa!!! \n");
     UARTprintf("Tiempo: %dms", SchedulerTickCountGet()*10);
+    //
+    // Enable the GPIOA interrupt.
+    //
+    ROM_IntEnable(INT_GPIOA);
+
+    //
+    // Enable the GPIOF interrupt.
+    //
+    ROM_IntEnable(INT_GPIOF);
 	while(1){
 	    //
 	    // Tell the scheduler to call any periodic tasks that are due to be
 	    // called.
 	    //
 	    SchedulerRun();
-
-	    //Read sensors data Acel and Gyro
-	    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
-	    I2CMRead(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 1, pfData_int, 14,
-	                 I2CMSimpleCallback, 0);
-	    while(!g_bI2CMSimpleDone);
-	    g_bI2CMSimpleDone = false;
-
-	    //Read Magneto
-/*	    uint8_t ST1;
-	    pui8Buffer[0] = 0x02;   //Status 1
-	    do{
-	        I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, &ST1, 1,
-	                 I2CMSimpleCallback,0);
-	    }while( !(ST1 & 0x01) ); //Data ready?
-	    g_bI2CMSimpleDone = false;*/
-
-	    pui8Buffer[0] = 0x03;
-	    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int_Mag, 6,
-	             I2CMSimpleCallback, 0);
-	    while(!g_bI2CMSimpleDone);
-	    g_bI2CMSimpleDone = false;
-
-	    uint8_t status2;
-	    pui8Buffer[0] = 0x09;
-	    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, &status2, 1,
-	             I2CMSimpleCallback, 0);
-	    while(!g_bI2CMSimpleDone);
-	    g_bI2CMSimpleDone = false;
-/*
-	    pui8Buffer[0] = 0x0A;   //CNTL1
-	    pui8Buffer[1] = 0x01;   //Single measurement mode
-	    I2CMWrite(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 2, I2CMSimpleCallback, 0);
-	    while(!g_bI2CMSimpleDone);
-	    g_bI2CMSimpleDone = false;*/
-
-	    pfAccel[0] = (int16_t)((pfData_int[0]<<8)|pfData_int[1]) * 0.0005985482;
-	    pfAccel[1] = (int16_t)((pfData_int[2]<<8)|pfData_int[3]) * 0.0005985482;
-	    pfAccel[2] = (int16_t)((pfData_int[4]<<8)|pfData_int[5]) * 0.0005985482;
-
-	    pfGyro[0] = (int16_t)((pfData_int[8]<<8)|pfData_int[9]) * 1.3323124e-4;
-	    pfGyro[1] = (int16_t)((pfData_int[10]<<8)|pfData_int[11]) * 1.3323124e-4;
-	    pfGyro[2] = (int16_t)((pfData_int[12]<<8)|pfData_int[13]) * 1.3323124e-4;
-
-	    pfMag[0] = (int16_t)((pfData_int_Mag[1]<<8)|pfData_int_Mag[0]) * 0.0000003;
-	    pfMag[1] = (int16_t)((pfData_int_Mag[3]<<8)|pfData_int_Mag[2]) * 0.0000003;
-	    pfMag[2] = (int16_t)((pfData_int_Mag[5]<<8)|pfData_int_Mag[4]) * 0.0000003;
-
-
-
 	}
+}
+
+static void PIDAngulo(void *pvParam){
+    //PID ANGULO
+    //*********ki = kp/ti
+    //*********kd = kp*td
+    //q0 = kp[1 + T/2ti + td/T]
+    //q1 = -kp[1 - T/2ti + 2td/T]
+    //q2 = kptd/T
+    //u[k] = u[k-1] + q0 * e[k] +q1 * e[k-1] + q2 * e[k-2];
+    e[2] = 0 - pfEulers[0];
+    u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
+
+    u[0] = u[1];
+    e[0] = e[1];
+    e[1] = e[2];
+
+    //PID VELOCIDAD
+    ev[2] = u[1] - pfGyro[0];
+    uv[1] = uv[0] + qv0 * ev[2] + qv1 * ev[1] + qv2 * ev[0];
+
+    uv[0] = uv[1];
+    ev[0] = ev[1];
+    ev[1] = ev[2];
+}
+
+static void readSensors(void *pvParam){
+    //Read sensors data Acel and Gyro
+    pui8Buffer[0] = 0x3B;   //ACCEL_XOUT_H
+    I2CMRead(&g_sI2CInst, MPU9250_ADDRESS, pui8Buffer, 1, pfData_int, 14,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+
+    pui8Buffer[0] = 0x03;
+    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int_Mag, 6,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+
+    uint8_t status2;
+    pui8Buffer[0] = 0x09;
+    I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, &status2, 1,
+             I2CMSimpleCallback, 0);
+    while(!g_bI2CMSimpleDone);
+    g_bI2CMSimpleDone = false;
+
+    pfAccel[0] = (int16_t)((pfData_int[0]<<8)|pfData_int[1]) * 0.0005985482;
+    pfAccel[1] = (int16_t)((pfData_int[2]<<8)|pfData_int[3]) * 0.0005985482;
+    pfAccel[2] = (int16_t)((pfData_int[4]<<8)|pfData_int[5]) * 0.0005985482;
+
+    pfGyro[0] = (int16_t)((pfData_int[8]<<8)|pfData_int[9]) * 1.3323124e-4;
+    pfGyro[1] = (int16_t)((pfData_int[10]<<8)|pfData_int[11]) * 1.3323124e-4;
+    pfGyro[2] = (int16_t)((pfData_int[12]<<8)|pfData_int[13]) * 1.3323124e-4;
+
+    pfMag[0] = (int16_t)((pfData_int_Mag[1]<<8)|pfData_int_Mag[0]) * 0.0000003;
+    pfMag[1] = (int16_t)((pfData_int_Mag[3]<<8)|pfData_int_Mag[2]) * 0.0000003;
+    pfMag[2] = (int16_t)((pfData_int_Mag[5]<<8)|pfData_int_Mag[4]) * 0.0000003;
 }
 
 static void printData(void *pvParam){
     uint32_t ui32Idx;
     int32_t i32IPart[12];
     int32_t i32FPart[12];
-    pfMag[0] *= 1e6;
+    /*pfMag[0] *= 1e6;
     pfMag[1] *= 1e6;
-    pfMag[2] *= 1e6;
+    pfMag[2] *= 1e6;*/
     //
     // Get Euler data. (Roll Pitch Yaw)
     //
@@ -371,11 +407,14 @@ static void printData(void *pvParam){
                         i32FPart[ui32Idx] *= -1;
                     }
                 }
-   /* UARTprintf("Acel %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[0], i32FPart[0], i32IPart[1], i32FPart[1], i32IPart[2], i32FPart[2]);
+    //UARTprintf("Acel %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[0], i32FPart[0], i32IPart[1], i32FPart[1], i32IPart[2], i32FPart[2]);
     UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
-    UARTprintf("Magn %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[6], i32FPart[6], i32IPart[7], i32FPart[7], i32IPart[8], i32FPart[8]);*/
-    UARTprintf("Euler %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
-    UARTprintf("Tiempo: %dms \n", SchedulerTickCountGet());
+    //UARTprintf("Magn %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[6], i32FPart[6], i32IPart[7], i32FPart[7], i32IPart[8], i32FPart[8]);
+    UARTprintf("Angulos %3d.%03d,%3d.%03d,%3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
+    //UARTprintf("Tiempo: %dms \n", SchedulerTickCountGet());
+    //UARTprintf("Canal1= %d Canal2= %d Canal3= %d Canal4= %d Canal5= %d \n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
+    UARTprintf("Error = %d  Control = %d \n", e[2], u[1]);
+    UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);
 }
 
 static void updateDCM(void *pvParam){
@@ -430,72 +469,91 @@ void UARTConfig(void){
     //
     UARTStdioConfig(0, 115200, 40000000);
 }
+void IntGPIOFHandler(void){
+    uint32_t currentTime = WTIMER0->TAR;
+    //
+    //Lectura del canal 5
+    //
+    if( GPIOF->DATA & (1<<4) ){
+        if(ultimoValorCanal5 == 0){
+            ultimoValorCanal5 = 1;
+            tiempo5 = currentTime;
+            GPIOF->ICR = (1 << 4);
+        }
+    }
+    else if(ultimoValorCanal5 == 1){
+        ultimoValorCanal5 = 0;
+        tiempoCanal5 = tiempo5 - currentTime;
+        GPIOF->ICR = (1 << 4);
+    }
+    GPIOF->ICR = (1 << 4);
+}
 
 void IntGPIOAHandler(void){
 
     uint32_t currentTime = WTIMER0->TAR;
 
     //
-    //Lectura del canal 2
+    //Lectura del canal 1
     //
     if( GPIOA->DATA & (1<<2) ){
+        if(ultimoValorCanal1 == 0){
+            ultimoValorCanal1 = 1;
+            tiempo1 = currentTime;
+            GPIOA->ICR = (1 << 2);
+        }
+    }
+    else if(ultimoValorCanal1 == 1){
+        ultimoValorCanal1 = 0;
+        tiempoCanal1 = tiempo1 - currentTime;
+        GPIOA->ICR = (1 << 2);
+    }
+
+    //
+    //Lectura del canal 2
+    //
+    if( GPIOA->DATA & (1<<3) ){
         if(ultimoValorCanal2 == 0){
             ultimoValorCanal2 = 1;
             tiempo2 = currentTime;
-            GPIOA->ICR = (1 << 2);
+            GPIOA->ICR = (1 << 3);
         }
     }
     else if(ultimoValorCanal2 == 1){
         ultimoValorCanal2 = 0;
         tiempoCanal2 = tiempo2 - currentTime;
-        GPIOA->ICR = (1 << 2);
+        GPIOA->ICR = (1 << 3);
     }
 
     //
     //Lectura del canal 3
     //
-    if( GPIOA->DATA & (1<<3) ){
+    if( GPIOA->DATA & (1<<4) ){
         if(ultimoValorCanal3 == 0){
             ultimoValorCanal3 = 1;
             tiempo3 = currentTime;
-            GPIOA->ICR = (1 << 3);
+            GPIOA->ICR = (1 << 4);
         }
     }
     else if(ultimoValorCanal3 == 1){
         ultimoValorCanal3 = 0;
         tiempoCanal3 = tiempo3 - currentTime;
-        GPIOA->ICR = (1 << 3);
+        GPIOA->ICR = (1 << 4);
     }
 
     //
     //Lectura del canal 4
     //
-    if( GPIOA->DATA & (1<<4) ){
+    if( GPIOA->DATA & (1<<5) ){
         if(ultimoValorCanal4 == 0){
             ultimoValorCanal4 = 1;
             tiempo4 = currentTime;
-            GPIOA->ICR = (1 << 4);
+            GPIOA->ICR = (1 << 5);
         }
     }
     else if(ultimoValorCanal4 == 1){
         ultimoValorCanal4 = 0;
         tiempoCanal4 = tiempo4 - currentTime;
-        GPIOA->ICR = (1 << 4);
-    }
-
-    //
-    //Lectura del canal 5
-    //
-    if( GPIOA->DATA & (1<<5) ){
-        if(ultimoValorCanal5 == 0){
-            ultimoValorCanal5 = 1;
-            tiempo5 = currentTime;
-            GPIOA->ICR = (1 << 5);
-        }
-    }
-    else if(ultimoValorCanal5 == 1){
-        ultimoValorCanal5 = 0;
-        tiempoCanal5 = tiempo5 - currentTime;
         GPIOA->ICR = (1 << 5);
     }
 }

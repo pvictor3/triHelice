@@ -11,7 +11,7 @@
 
 void pwmInit(void);
 
-void changeDuty(uint8_t salida, uint32_t valor);
+void velocidadMotor(uint8_t motor, uint8_t vel);
 
 
 

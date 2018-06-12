@@ -21,8 +21,6 @@ main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/uart.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/gpio.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/i2cm_drv.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/comp_dcm.h
-main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/mpu6050.h
-main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/hw_mpu6050.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/utils/uartstdio.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdarg.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/utils/scheduler.h
@@ -49,8 +47,6 @@ C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/uart.h:
 C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/gpio.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/i2cm_drv.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/comp_dcm.h: 
-C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/mpu6050.h: 
-C:/ti/TivaWare_C_Series-2.1.4.178/sensorlib/hw_mpu6050.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/utils/uartstdio.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdarg.h: 
 C:/ti/TivaWare_C_Series-2.1.4.178/utils/scheduler.h: 
