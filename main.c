@@ -179,7 +179,7 @@ int main(void)
 	SchedulerInit(TICKS_PER_SECOND);
 
 	//Activa los periféricos a utilizar
-	SYSCTL->RCGC2 |= (1<<5)|(1<<4)|(1<<3)|(1<<2)|(1<<0);        //Activa el reloj para GPIOA, GPIOC, GPIOD, GPIOE,GPIOF
+	SYSCTL->RCGC2 |= (1<<5)|(1<<4)|(1<<3)|(1<<2)|(1<<1)|(1<<0);        //Activa el reloj para GPIOA, GPIOB, GPIOC, GPIOD, GPIOE,GPIOF
 	SYSCTL->RCGCPWM |= (1<<0);                                  //Activa el reloj para PWM MODULE 0
 	SYSCTL->RCGCWTIMER |= (1<<0);                               //Activa el timer 0 de 32bits
 	SYSCTL->RCGCI2C |= (1<<1);                                  //Activa I2C modulo 1
@@ -408,13 +408,14 @@ static void printData(void *pvParam){
                     }
                 }
     //UARTprintf("Acel %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[0], i32FPart[0], i32IPart[1], i32FPart[1], i32IPart[2], i32FPart[2]);
-    UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
+    /*UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
     //UARTprintf("Magn %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[6], i32FPart[6], i32IPart[7], i32FPart[7], i32IPart[8], i32FPart[8]);
     UARTprintf("Angulos %3d.%03d,%3d.%03d,%3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
     //UARTprintf("Tiempo: %dms \n", SchedulerTickCountGet());
     //UARTprintf("Canal1= %d Canal2= %d Canal3= %d Canal4= %d Canal5= %d \n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
     UARTprintf("Error = %d  Control = %d \n", e[2], u[1]);
-    UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);
+    UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);*/
+    UARTprintf("Canal1 = %d\nCanal2 = %d\nCanal3 = %d\nCanal4 = %d\nCanal5 = %d\n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
 }
 
 static void updateDCM(void *pvParam){
@@ -453,26 +454,26 @@ static void updateDCM(void *pvParam){
 
 void UARTConfig(void){
     //
-    // Enable the peripherals used by UART0.
+    // Enable the peripherals used by UART1.
     //
-    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART1);
 
     //
     // Set GPIO A0 and A1 as UART pins.
     //
-    ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
-    ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
-    ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    ROM_GPIOPinConfigure(GPIO_PB0_U1RX);
+    ROM_GPIOPinConfigure(GPIO_PB1_U1TX);
+    ROM_GPIOPinTypeUART(GPIO_PORTB_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
     //
-    // Configure the UART for 115,200, 8-N-1 operation.
+    // Configure the UART for 57600, 8-N-1 operation.
     //
-    UARTStdioConfig(0, 115200, 40000000);
+    UARTStdioConfig(1, 57600, 40000000);
 }
 void IntGPIOFHandler(void){
     uint32_t currentTime = WTIMER0->TAR;
     //
-    //Lectura del canal 5
+    //Lectura GPIOF4
     //
     if( GPIOF->DATA & (1<<4) ){
         if(ultimoValorCanal5 == 0){
@@ -494,7 +495,7 @@ void IntGPIOAHandler(void){
     uint32_t currentTime = WTIMER0->TAR;
 
     //
-    //Lectura del canal 1
+    //Lectura GPIOA2
     //
     if( GPIOA->DATA & (1<<2) ){
         if(ultimoValorCanal1 == 0){
@@ -510,7 +511,7 @@ void IntGPIOAHandler(void){
     }
 
     //
-    //Lectura del canal 2
+    //Lectura GPIOA3
     //
     if( GPIOA->DATA & (1<<3) ){
         if(ultimoValorCanal2 == 0){
@@ -526,7 +527,7 @@ void IntGPIOAHandler(void){
     }
 
     //
-    //Lectura del canal 3
+    //Lectura GPIOA4
     //
     if( GPIOA->DATA & (1<<4) ){
         if(ultimoValorCanal3 == 0){
@@ -542,7 +543,7 @@ void IntGPIOAHandler(void){
     }
 
     //
-    //Lectura del canal 4
+    //Lectura GPIO5
     //
     if( GPIOA->DATA & (1<<5) ){
         if(ultimoValorCanal4 == 0){

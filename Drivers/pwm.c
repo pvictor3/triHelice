@@ -21,8 +21,8 @@ void pwmInit(void){
     PWM0->_3_GENB = 0x80C;                              //Cuando Count=Load la salida es alta, cuando Count=CMPB la salida es baja
     PWM0->_3_LOAD = 0xC350;                              //50000 para una frecuencia de 50Hz con un reloj de 2.5MHz
 
-    PWM0->_3_CMPA = 2500;                              //Duty Cycle 1ms
-    PWM0->_3_CMPB = 2500;                              //Duty Cycle 1ms
+    PWM0->_3_CMPA = 47500;                              //Duty Cycle 1ms
+    PWM0->_3_CMPB = 47500;                              //Duty Cycle 1ms
 
     PWM0->_3_CTL = (1 << 0);                            //PWM block enable
     PWM0->ENABLE |= (1 << 7) | (1 << 6);                 //Activa la salida para PWM6 y PWM7
@@ -39,17 +39,17 @@ void pwmInit(void){
     PWM0->_2_GENB = 0x80C;
     PWM0->_2_LOAD = 0xC350;
 
-    PWM0->_2_CMPB = 2500;
+    PWM0->_2_CMPB = 47500;
 
     PWM0->_2_CTL = 0x01;
     PWM0->ENABLE |= (1<<5);
 }
 
-//2500 = 1ms duty cycle
-//5000 = 2ms duty cycle
+//47500 = 1ms duty cycle
+//45000 = 2ms duty cycle
 void velocidadMotor(uint8_t motor, uint8_t vel){
     uint16_t valor;
-    valor = 2500 + 2500 * (vel / 100);
+    valor = 47500 + 2500 * (vel / 100);
     switch(motor){
     case 1:
         PWM0->_3_CMPA = valor;
