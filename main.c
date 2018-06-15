@@ -25,11 +25,9 @@
 #define MPU9250_ADDRESS 0x68
 #define MAG_ADDRESS     0x0C
 
-void UARTConfig(void);
+void UARTConfig(void);  //Función que inicializa el puerto serie para telemetría
+uint8_t convertirVelocidad(uint32_t pulse); //Funcion para obtener un valor de 0-100 para la velocidad
 
-uint32_t ultimoValorCanal1=0, ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
-uint32_t tiempo1, tiempo2, tiempo3, tiempo4, tiempo5;
-uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
 uint32_t ui32CompDCMStarted;
 
 uint8_t pui8Buffer[6];
@@ -115,6 +113,8 @@ if(ui8Status != I2CM_STATUS_SUCCESS)
 //
 g_bI2CMSimpleDone = true;
 }
+
+//Variables para leer los sensores inerciales
 uint8_t pfData_int[14];
 uint8_t pfData_int_Mag[6];
 
@@ -123,14 +123,26 @@ float *pfAccel, *pfGyro, *pfMag, *pfEulers;
 int i;
 float angle;
 
-int32_t e[3], u[2];
-int32_t q0,q1,q2;
-uint32_t kp = 1, ti = 0, td = 0;
-uint32_t T = 0.1;
+//Variables para los controladores PID
+float e[3], u[2];
+float q0,q1,q2;
+float kp = 1.41, ti = 0.1, td = 0.5;
+float T = 0.1;
+
+float e_roll[3], u_roll[2];
+float q0_roll, q1_roll, q2_roll;
+float kp_roll = 1.41, ti_roll = 0.1, td_roll= 0.5;
 
 int32_t ev[3], uv[2];
 int32_t qv0,qv1,qv2;
 uint32_t kpv = 1, tiv = 0, tdv = 0;
+
+//Variables para guardar las señales recibidas del control remoto
+uint32_t ultimoValorCanal1=0, ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
+uint32_t tiempo1, tiempo2, tiempo3, tiempo4, tiempo5;
+uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
+
+uint32_t rotor1, rotor2, rotor3;
 
 int main(void)
 {
@@ -153,6 +165,16 @@ int main(void)
     q0 = kp * (1 + T / (2 * ti) + td / T);
     q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
     q2 = (kp * td) / T;
+
+    u_roll[0] = 0;
+    e_roll[0] = 0;
+    e_roll[1] = 0;
+    //q0 = kp[1 + T/2ti + td/T]
+    //q1 = -kp[1 - T/2ti + 2td/T]
+    //q2 = kptd/T
+    q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
+    q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
+    q2_roll = (kp_roll * td_roll) / T;
 
     uv[0] = 0;
     ev[0] = 0;
@@ -288,6 +310,8 @@ int main(void)
     // Enable the GPIOF interrupt.
     //
     ROM_IntEnable(INT_GPIOF);
+
+    while(SchedulerTickCountGet()<500); //Espera a que los motores hagan bip.
 	while(1){
 	    //
 	    // Tell the scheduler to call any periodic tasks that are due to be
@@ -298,6 +322,20 @@ int main(void)
 }
 
 static void PIDAngulo(void *pvParam){
+    CompDCMComputeEulers(&g_sCompDCMInst, pfEulers, pfEulers + 1,
+                             pfEulers + 2);
+
+        //
+        // Convert Eulers to degrees. 180/PI = 57.29...
+        // Convert Yaw to 0 to 360 to approximate compass headings.
+        //
+        pfEulers[0] *= -57.295779513082320876798154814105f;
+        pfEulers[1] *= 57.295779513082320876798154814105f;
+        pfEulers[2] *= 57.295779513082320876798154814105f;
+        if(pfEulers[2] < 0)
+        {
+            pfEulers[2] += 360.0f;
+        }
     //PID ANGULO
     //*********ki = kp/ti
     //*********kd = kp*td
@@ -305,12 +343,31 @@ static void PIDAngulo(void *pvParam){
     //q1 = -kp[1 - T/2ti + 2td/T]
     //q2 = kptd/T
     //u[k] = u[k-1] + q0 * e[k] +q1 * e[k-1] + q2 * e[k-2];
+    /*
+     * PITCH ANGLE
+     * */
     e[2] = 0 - pfEulers[0];
     u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
+
+    if(u[1]>400)u[1]=400;
+    if(u[1]<-400)u[1]=-400;
 
     u[0] = u[1];
     e[0] = e[1];
     e[1] = e[2];
+
+
+    /*
+     * ROLL ANGLE
+     * */
+    e_roll[2] = 0 - pfEulers[1];
+    u_roll[1] = u_roll[0] + q0_roll * e_roll[2] + q1_roll * e_roll[1] + q2_roll * e_roll[0];
+    if(u_roll[1]>400)u_roll[1]=400;
+    if(u_roll[1]<-400)u_roll[1]=-400;
+
+    u_roll[0] = u_roll[1];
+    e_roll[0] = e_roll[1];
+    e_roll[1] = e_roll[2];
 
     //PID VELOCIDAD
     ev[2] = u[1] - pfGyro[0];
@@ -319,6 +376,19 @@ static void PIDAngulo(void *pvParam){
     uv[0] = uv[1];
     ev[0] = ev[1];
     ev[1] = ev[2];
+
+    rotor1 = tiempoCanal1-900 - u_roll[1];
+    rotor2 = tiempoCanal1-900 + u_roll[1];
+    rotor3 = tiempoCanal1-900 + u[1];
+    velocidadMotor(1,convertirVelocidad(rotor1));
+    velocidadMotor(2,convertirVelocidad(rotor2));
+    velocidadMotor(3,convertirVelocidad(rotor3));
+}
+
+uint8_t convertirVelocidad(uint32_t pulse){
+    if(pulse>1000)pulse = 1000;
+
+    return (uint8_t)pulse*0.1;
 }
 
 static void readSensors(void *pvParam){
@@ -362,6 +432,7 @@ static void printData(void *pvParam){
     /*pfMag[0] *= 1e6;
     pfMag[1] *= 1e6;
     pfMag[2] *= 1e6;*/
+
     //
     // Get Euler data. (Roll Pitch Yaw)
     //
@@ -372,7 +443,7 @@ static void printData(void *pvParam){
     // Convert Eulers to degrees. 180/PI = 57.29...
     // Convert Yaw to 0 to 360 to approximate compass headings.
     //
-    pfEulers[0] *= 57.295779513082320876798154814105f;
+    pfEulers[0] *= -57.295779513082320876798154814105f;
     pfEulers[1] *= 57.295779513082320876798154814105f;
     pfEulers[2] *= 57.295779513082320876798154814105f;
     if(pfEulers[2] < 0)
@@ -408,14 +479,38 @@ static void printData(void *pvParam){
                     }
                 }
     //UARTprintf("Acel %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[0], i32FPart[0], i32IPart[1], i32FPart[1], i32IPart[2], i32FPart[2]);
-    /*UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
+    //UARTprintf("Gyro %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[3], i32FPart[3], i32IPart[4], i32FPart[4], i32IPart[5], i32FPart[5]);
     //UARTprintf("Magn %3d.%03d   %3d.%03d   %3d.%03d\n", i32IPart[6], i32FPart[6], i32IPart[7], i32FPart[7], i32IPart[8], i32FPart[8]);
-    UARTprintf("Angulos %3d.%03d,%3d.%03d,%3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
+    //UARTprintf("Angulos %3d.%03d,%3d.%03d,%3d.%03d\n", i32IPart[9], i32FPart[9], i32IPart[10], i32FPart[10], i32IPart[11], i32FPart[11]);
     //UARTprintf("Tiempo: %dms \n", SchedulerTickCountGet());
-    //UARTprintf("Canal1= %d Canal2= %d Canal3= %d Canal4= %d Canal5= %d \n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
-    UARTprintf("Error = %d  Control = %d \n", e[2], u[1]);
-    UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);*/
-    UARTprintf("Canal1 = %d\nCanal2 = %d\nCanal3 = %d\nCanal4 = %d\nCanal5 = %d\n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
+
+    //UARTprintf("Error = %d  Control = %d \n", e[2], u[1]);
+    //UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);
+    //UARTprintf("Canal1 = %d Canal2 = %d Canal3 = %d Canal4 = %d Canal5 = %d\n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
+
+    int32_t parteEntera = (int32_t) u[1];
+    int32_t parteDecimal = (int32_t) (u[1] * 1000.0f);
+    parteDecimal = parteDecimal - (parteEntera * 1000);
+    if(parteDecimal < 0) parteDecimal *= -1;
+
+    int32_t parteEnteraE = (int32_t) e[2];
+    int32_t parteDecimalE = (int32_t) (e[2] * 1000.0f);
+    parteDecimalE = parteDecimalE - (parteEnteraE * 1000);
+    if(parteDecimalE < 0) parteDecimalE *= -1;
+
+    int32_t parteEntera_roll = (int32_t) u_roll[1];
+    int32_t parteDecimal_roll = (int32_t) (u_roll[1] * 1000.0f);
+    parteDecimal_roll = parteDecimal_roll - (parteEntera_roll * 1000);
+    if(parteDecimal_roll < 0) parteDecimal_roll *= -1;
+
+    int32_t parteEnteraE_roll = (int32_t) e_roll[2];
+    int32_t parteDecimalE_roll = (int32_t) (e_roll[2] * 1000.0f);
+    parteDecimalE_roll = parteDecimalE_roll - (parteEnteraE_roll * 1000);
+    if(parteDecimalE_roll < 0) parteDecimalE_roll *= -1;
+
+    UARTprintf("u[1] = %3d.%03d \t e[2] = %3d.%03d\n", parteEntera, parteDecimal, parteEnteraE, parteDecimalE);
+    UARTprintf("u_roll[1] = %3d.%03d \t e_roll[2] = %3d.%03d\n", parteEntera_roll, parteDecimal_roll, parteEnteraE_roll, parteDecimalE_roll);
+    UARTprintf("Rotor1 = %d \t Rotor2= %d \t Rotor3= %d \n", rotor1,rotor2,rotor3);
 }
 
 static void updateDCM(void *pvParam){

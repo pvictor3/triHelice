@@ -49,7 +49,9 @@ void pwmInit(void){
 //45000 = 2ms duty cycle
 void velocidadMotor(uint8_t motor, uint8_t vel){
     uint16_t valor;
-    valor = 47500 + 2500 * (vel / 100);
+    uint16_t adicion;
+    adicion = (uint16_t)(2500*vel*0.01);
+    valor = 47500 - adicion;
     switch(motor){
     case 1:
         PWM0->_3_CMPA = valor;
