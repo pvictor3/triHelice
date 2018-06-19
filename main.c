@@ -126,12 +126,12 @@ float angle;
 //Variables para los controladores PID
 float e[3], u[2];
 float q0,q1,q2;
-float kp = 1.41, ti = 0.1, td = 0.5;
+float kp = 1, ti = 0, td = 0;
 float T = 0.1;
 
 float e_roll[3], u_roll[2];
 float q0_roll, q1_roll, q2_roll;
-float kp_roll = 1.41, ti_roll = 0.1, td_roll= 0.5;
+float kp_roll = 1, ti_roll = 0, td_roll= 0;
 
 int32_t ev[3], uv[2];
 int32_t qv0,qv1,qv2;
@@ -143,6 +143,8 @@ uint32_t tiempo1, tiempo2, tiempo3, tiempo4, tiempo5;
 uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
 
 uint32_t rotor1, rotor2, rotor3;
+
+uint8_t vel1, vel2, vel3;
 
 int main(void)
 {
@@ -162,8 +164,10 @@ int main(void)
     //q0 = kp[1 + T/2ti + td/T]
     //q1 = -kp[1 - T/2ti + 2td/T]
     //q2 = kptd/T
-    q0 = kp * (1 + T / (2 * ti) + td / T);
-    q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
+    //q0 = kp * (1 + T / (2 * ti) + td / T);
+    //q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
+    q0 = kp;
+    q1 = -kp;
     q2 = (kp * td) / T;
 
     u_roll[0] = 0;
@@ -172,8 +176,10 @@ int main(void)
     //q0 = kp[1 + T/2ti + td/T]
     //q1 = -kp[1 - T/2ti + 2td/T]
     //q2 = kptd/T
-    q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
-    q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
+    //q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
+    //q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
+    q0_roll = kp_roll;
+    q1_roll = -kp_roll;
     q2_roll = (kp_roll * td_roll) / T;
 
     uv[0] = 0;
@@ -317,25 +323,30 @@ int main(void)
 	    // Tell the scheduler to call any periodic tasks that are due to be
 	    // called.
 	    //
-	    SchedulerRun();
+	    if(tiempoCanal1 < 1100 && tiempoCanal1 > 900){
+	        SchedulerRun();
+	    }else{
+	        UARTprintf("Waiting for throtle in bottom position\n");
+	    }
 	}
 }
 
 static void PIDAngulo(void *pvParam){
     CompDCMComputeEulers(&g_sCompDCMInst, pfEulers, pfEulers + 1,
-                             pfEulers + 2);
+                         pfEulers + 2);
 
-        //
-        // Convert Eulers to degrees. 180/PI = 57.29...
-        // Convert Yaw to 0 to 360 to approximate compass headings.
-        //
-        pfEulers[0] *= -57.295779513082320876798154814105f;
-        pfEulers[1] *= 57.295779513082320876798154814105f;
-        pfEulers[2] *= 57.295779513082320876798154814105f;
-        if(pfEulers[2] < 0)
-        {
-            pfEulers[2] += 360.0f;
-        }
+    //
+    // Convert Eulers to degrees. 180/PI = 57.29...
+    // Convert Yaw to 0 to 360 to approximate compass headings.
+    //
+    pfEulers[0] *= -57.295779513082320876798154814105f;
+    pfEulers[1] *= 57.295779513082320876798154814105f;
+    pfEulers[2] *= 57.295779513082320876798154814105f;
+    if(pfEulers[2] < 0)
+    {
+        pfEulers[2] += 360.0f;
+    }
+    UARTprintf("%d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]));
     //PID ANGULO
     //*********ki = kp/ti
     //*********kd = kp*td
@@ -349,8 +360,8 @@ static void PIDAngulo(void *pvParam){
     e[2] = 0 - pfEulers[0];
     u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
 
-    if(u[1]>400)u[1]=400;
-    if(u[1]<-400)u[1]=-400;
+    if(u[1]>10)u[1]=10;
+    if(u[1]<-10)u[1]=-10;
 
     u[0] = u[1];
     e[0] = e[1];
@@ -362,8 +373,8 @@ static void PIDAngulo(void *pvParam){
      * */
     e_roll[2] = 0 - pfEulers[1];
     u_roll[1] = u_roll[0] + q0_roll * e_roll[2] + q1_roll * e_roll[1] + q2_roll * e_roll[0];
-    if(u_roll[1]>400)u_roll[1]=400;
-    if(u_roll[1]<-400)u_roll[1]=-400;
+    if(u_roll[1]>10)u_roll[1]=10;
+    if(u_roll[1]<-10)u_roll[1]=-10;
 
     u_roll[0] = u_roll[1];
     e_roll[0] = e_roll[1];
@@ -377,18 +388,24 @@ static void PIDAngulo(void *pvParam){
     ev[0] = ev[1];
     ev[1] = ev[2];
 
-    rotor1 = tiempoCanal1-900 - u_roll[1];
-    rotor2 = tiempoCanal1-900 + u_roll[1];
-    rotor3 = tiempoCanal1-900 + u[1];
-    velocidadMotor(1,convertirVelocidad(rotor1));
-    velocidadMotor(2,convertirVelocidad(rotor2));
-    velocidadMotor(3,convertirVelocidad(rotor3));
+    rotor1 = convertirVelocidad(tiempoCanal1-900);
+    rotor2 = convertirVelocidad(tiempoCanal1-900);
+    rotor3 = convertirVelocidad(tiempoCanal1-900);
+
+    vel1 = -u_roll[1] + rotor1;
+    vel2 = u_roll[1] + rotor2;
+    vel3 = u[1] + rotor3;
+
+    velocidadMotor(1,vel1);
+    velocidadMotor(2,vel2);
+    velocidadMotor(3,vel3);
 }
 
 uint8_t convertirVelocidad(uint32_t pulse){
     if(pulse>1000)pulse = 1000;
 
-    return (uint8_t)pulse*0.1;
+    uint8_t velocidad = (uint8_t)(pulse * 0.1);
+    return velocidad;
 }
 
 static void readSensors(void *pvParam){
@@ -487,7 +504,7 @@ static void printData(void *pvParam){
     //UARTprintf("Error = %d  Control = %d \n", e[2], u[1]);
     //UARTprintf("Error2 = %d Control2 = %d \n", ev[2], uv[1]);
     //UARTprintf("Canal1 = %d Canal2 = %d Canal3 = %d Canal4 = %d Canal5 = %d\n", tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5);
-
+/*
     int32_t parteEntera = (int32_t) u[1];
     int32_t parteDecimal = (int32_t) (u[1] * 1000.0f);
     parteDecimal = parteDecimal - (parteEntera * 1000);
@@ -510,7 +527,8 @@ static void printData(void *pvParam){
 
     UARTprintf("u[1] = %3d.%03d \t e[2] = %3d.%03d\n", parteEntera, parteDecimal, parteEnteraE, parteDecimalE);
     UARTprintf("u_roll[1] = %3d.%03d \t e_roll[2] = %3d.%03d\n", parteEntera_roll, parteDecimal_roll, parteEnteraE_roll, parteDecimalE_roll);
-    UARTprintf("Rotor1 = %d \t Rotor2= %d \t Rotor3= %d \n", rotor1,rotor2,rotor3);
+    UARTprintf("Vel1 = %d \t Vel2= %d \t Vel3= %d \t Canal1=%d \n", vel1,vel2,vel3,tiempoCanal1);
+*/
 }
 
 static void updateDCM(void *pvParam){
