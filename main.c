@@ -119,7 +119,7 @@ uint8_t pfData_int[14];
 uint8_t pfData_int_Mag[6];
 
 float pfData[12];
-float *pfAccel, *pfGyro, *pfMag, *pfEulers;
+float *pfAccel, *pfGyro, *pfMag, *pfEulers; //pfEulers[0] == Roll_Angle
 int i;
 float angle;
 
@@ -213,7 +213,7 @@ int main(void)
 	SYSCTL->RCGCI2C |= (1<<1);                                  //Activa I2C modulo 1
 
 	//
-	//Configura la UART0 para debug
+	//Configura la UART1 para debug
 	//
 	UARTConfig();
 	UARTprintf("\033[H\033[2J");
@@ -304,9 +304,6 @@ int main(void)
     SchedulerTaskEnable(3,true);
     UARTprintf("Scheduler Iniciado \n");
 
-
-    UARTprintf("Inicializacion completa!!! \n");
-    UARTprintf("Tiempo: %dms", SchedulerTickCountGet()*10);
     //
     // Enable the GPIOA interrupt.
     //
@@ -317,16 +314,28 @@ int main(void)
     //
     ROM_IntEnable(INT_GPIOF);
 
+    UARTprintf("Esperando a los motores...\n");
     while(SchedulerTickCountGet()<500); //Espera a que los motores hagan bip.
+    int start = 0;
+    UARTprintf("Inicializacion completa!!! \n");
+    UARTprintf("Tiempo: %dms", SchedulerTickCountGet()*10);
 	while(1){
 	    //
 	    // Tell the scheduler to call any periodic tasks that are due to be
 	    // called.
 	    //
-	    if(tiempoCanal1 < 1100 && tiempoCanal1 > 900){
+	    if(start == 0 && tiempoCanal1 < 1200 && tiempoCanal1 > 900 && tiempoCanal3 > 1800){ //Inicia el vuelo
+	        start = 1;
+	        UARTprintf("\nIniciar vuelo");
+	        while(tiempoCanal3>1600); //Espera a que regrese a la posicion central
+	    }
+	    if(start == 1 && tiempoCanal1 < 1200 && tiempoCanal1 > 900 && tiempoCanal3 > 1800){ //Apaga el vuelo
+	        start = 0;
+	        UARTprintf("Detener vuelo");
+	        while(tiempoCanal3>1600);
+	    }
+	    if(start){
 	        SchedulerRun();
-	    }else{
-	        UARTprintf("Waiting for throtle in bottom position\n");
 	    }
 	}
 }
@@ -346,7 +355,8 @@ static void PIDAngulo(void *pvParam){
     {
         pfEulers[2] += 360.0f;
     }
-    UARTprintf("%d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]));
+    //UARTprintf("%d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]));
+    UARTprintf("%d %d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]), (int32_t)(pfEulers[2]));
     //PID ANGULO
     //*********ki = kp/ti
     //*********kd = kp*td
@@ -357,7 +367,7 @@ static void PIDAngulo(void *pvParam){
     /*
      * PITCH ANGLE
      * */
-    e[2] = 0 - pfEulers[0];
+    e[2] = 0 - pfEulers[1];
     u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
 
     if(u[1]>10)u[1]=10;
@@ -371,7 +381,7 @@ static void PIDAngulo(void *pvParam){
     /*
      * ROLL ANGLE
      * */
-    e_roll[2] = 0 - pfEulers[1];
+    e_roll[2] = 0 - pfEulers[0];
     u_roll[1] = u_roll[0] + q0_roll * e_roll[2] + q1_roll * e_roll[1] + q2_roll * e_roll[0];
     if(u_roll[1]>10)u_roll[1]=10;
     if(u_roll[1]<-10)u_roll[1]=-10;
@@ -388,17 +398,18 @@ static void PIDAngulo(void *pvParam){
     ev[0] = ev[1];
     ev[1] = ev[2];
 
-    rotor1 = convertirVelocidad(tiempoCanal1-900);
-    rotor2 = convertirVelocidad(tiempoCanal1-900);
-    rotor3 = convertirVelocidad(tiempoCanal1-900);
+    rotor1 = 30;
+    rotor2 = 30;
+    rotor3 = 30;
 
-    vel1 = -u_roll[1] + rotor1;
-    vel2 = u_roll[1] + rotor2;
-    vel3 = u[1] + rotor3;
+    vel1 = u_roll[1] + rotor1;
+    vel2 = -u_roll[1] + rotor2;
+    vel3 = rotor3 - u[1];
 
     velocidadMotor(1,vel1);
     velocidadMotor(2,vel2);
     velocidadMotor(3,vel3);
+    UARTprintf("%d %d %d\n\r", vel1, vel2, vel3);
 }
 
 uint8_t convertirVelocidad(uint32_t pulse){
@@ -572,7 +583,7 @@ void UARTConfig(void){
     ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART1);
 
     //
-    // Set GPIO A0 and A1 as UART pins.
+    // Set GPIO B0 and B1 as UART pins.
     //
     ROM_GPIOPinConfigure(GPIO_PB0_U1RX);
     ROM_GPIOPinConfigure(GPIO_PB1_U1TX);
