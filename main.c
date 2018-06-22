@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 
 #include "CMSIS.h"
@@ -16,6 +18,11 @@
 #include "driverlib/gpio.h"
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/comp_dcm.h"
+
+#ifndef UART_BUFFERED
+#define UART_BUFFERED     1
+#endif
+
 #include "utils/uartstdio.h"
 #include "utils/scheduler.h"
 #include "driverlib/adc.h"
@@ -31,6 +38,7 @@
 void UARTConfig(void);  //Función que inicializa el puerto serie para telemetría
 void ADCConfig(void);   //Configurar dos entradas analogicas
 uint8_t convertirVelocidad(uint32_t pulse); //Funcion para obtener un valor de 0-100 para la velocidad
+void UARTprintfloat(float num);
 
 uint32_t ui32CompDCMStarted;
 
@@ -153,6 +161,10 @@ uint8_t vel1, vel2, vel3;
 //Variables para el ADC
 uint32_t ui32ADC0Value[4];
 int8_t pi8Data[2];
+
+//Variables para el buffer
+uint32_t size = 20;
+char miBuffer[20];
 
 int main(void)
 {
@@ -347,6 +359,8 @@ int main(void)
 	    if(start){
 	        SchedulerRun();
 	    }else{
+	        int tiempo = SchedulerTickCountGet();
+	        /*
 	        ROM_ADCIntClear(ADC0_BASE, 1);
 	        ROM_ADCProcessorTrigger(ADC0_BASE, 1);
 	        while(!ROM_ADCIntStatus(ADC0_BASE, 1, false));
@@ -354,9 +368,81 @@ int main(void)
 	        ui32ADC0Value[0] = (uint32_t)(ui32ADC0Value[0]*constADC);
 	        ui32ADC0Value[1] = (uint32_t)(ui32ADC0Value[1]*constADC);
 	        UARTprintf("\nCanal 11 = %d", ui32ADC0Value[0]);
-	        UARTprintf("\nCanal 5 = %d", ui32ADC0Value[1]);
+	        UARTprintf("\nCanal 5 = %d", ui32ADC0Value[1]);*/
+
+	        UARTprintfloat(kp);
+	        UARTprintf(" - ");
+	        UARTprintfloat(ti);
+	        UARTprintf(" - ");
+	        UARTprintfloat(td);
+            UARTprintf(" - ");
+            UARTprintfloat(kp_roll);
+            UARTprintf(" - ");
+            UARTprintfloat(ti_roll);
+            UARTprintf(" - ");
+            UARTprintfloat(td_roll);
+            UARTprintf("\n");
+	        while(UARTRxBytesAvail()){
+	            UARTgets(miBuffer, size);
+	            if(!strcmp(miBuffer,"KPpitch")){
+	                UARTprintf("Ingresa kp pitch\n");
+	                UARTgets(miBuffer, size);
+	                kp = atof(miBuffer);
+	            }
+
+	            if(!strcmp(miBuffer,"TIpitch")){
+	                UARTprintf("Ingresa ti pitch\n");
+	                UARTgets(miBuffer, size);
+	                ti = atof(miBuffer);
+	            }
+
+	            if(!strcmp(miBuffer,"TDpitch")){
+	                UARTprintf("Ingresa td pitch\n");
+	                UARTgets(miBuffer, size);
+	                td = atof(miBuffer);
+	            }
+	            if(!strcmp(miBuffer,"KProll")){
+	                UARTprintf("Ingresa kp roll\n");
+	                UARTgets(miBuffer, size);
+	                kp_roll = atof(miBuffer);
+	            }
+
+	            if(!strcmp(miBuffer,"TIroll")){
+	                UARTprintf("Ingresa ti roll\n");
+	                UARTgets(miBuffer, size);
+	                ti_roll = atof(miBuffer);
+	            }
+
+	            if(!strcmp(miBuffer,"TDroll")){
+	                UARTprintf("Ingresa td roll\n");
+	                UARTgets(miBuffer, size);
+	                td_roll = atof(miBuffer);
+	            }
+	            /*if(comando == 'p'){
+	                UARTprintf("\nIngresa el valor de kp\n");
+	                UARTgets(miBuffer, size);
+	                float valor = atof(miBuffer);
+	                UARTprintf("\nValor guardado = ");
+	                UARTprintf(miBuffer);
+	                UARTprintf("\n");
+	            }*/
+	        }
+	        while(SchedulerTickCountGet() < (tiempo+50));
+	        UARTFlushTx(true);
 	    }
 	}
+}
+
+void UARTprintfloat(float num){
+    int32_t partI;
+    int32_t partD;
+
+    partI = (uint32_t) num;
+    partD = (uint32_t) (num*1000.0f);
+    partD = partD - (partI * 1000);
+
+    if(partD < 0) partD *= -1;
+    UARTprintf("%3d.%03d", partI, partD);
 }
 
 static void PIDAngulo(void *pvParam){
@@ -626,6 +712,8 @@ void UARTConfig(void){
     // Configure the UART for 57600, 8-N-1 operation.
     //
     UARTStdioConfig(1, 57600, 40000000);
+
+    UARTEchoSet(true);
 
     /*
      * CONFIGURAR UART3 PARA GPS ECHO

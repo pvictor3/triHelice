@@ -2,10 +2,12 @@
 
 main.obj: ../main.c
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdint.h
+main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdlib.h
+main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/linkage.h
+main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/string.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdbool.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/yvals.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdarg.h
-main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/linkage.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/_lock.h
 main.obj: ../CMSIS.h
 main.obj: ../drivers/pwm.h
@@ -29,10 +31,12 @@ main.obj: C:/ti/TivaWare_C_Series-2.1.4.178/driverlib/rom.h
 
 ../main.c: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdint.h: 
+C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdlib.h: 
+C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/linkage.h: 
+C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/string.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdbool.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/yvals.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/stdarg.h: 
-C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/linkage.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include/_lock.h: 
 ../CMSIS.h: 
 ../drivers/pwm.h: 
