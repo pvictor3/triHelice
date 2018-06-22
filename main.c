@@ -18,6 +18,7 @@
 #include "sensorlib/comp_dcm.h"
 #include "utils/uartstdio.h"
 #include "utils/scheduler.h"
+#include "driverlib/adc.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
@@ -25,7 +26,10 @@
 #define MPU9250_ADDRESS 0x68
 #define MAG_ADDRESS     0x0C
 
+#define constADC 0.8056640625
+
 void UARTConfig(void);  //Función que inicializa el puerto serie para telemetría
+void ADCConfig(void);   //Configurar dos entradas analogicas
 uint8_t convertirVelocidad(uint32_t pulse); //Funcion para obtener un valor de 0-100 para la velocidad
 
 uint32_t ui32CompDCMStarted;
@@ -126,12 +130,12 @@ float angle;
 //Variables para los controladores PID
 float e[3], u[2];
 float q0,q1,q2;
-float kp = 1, ti = 0, td = 0;
+float kp = 2, ti = 4, td = 0.5;
 float T = 0.1;
 
 float e_roll[3], u_roll[2];
 float q0_roll, q1_roll, q2_roll;
-float kp_roll = 1, ti_roll = 0, td_roll= 0;
+float kp_roll = 2, ti_roll = 4, td_roll= 0.5;
 
 int32_t ev[3], uv[2];
 int32_t qv0,qv1,qv2;
@@ -145,6 +149,10 @@ uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
 uint32_t rotor1, rotor2, rotor3;
 
 uint8_t vel1, vel2, vel3;
+
+//Variables para el ADC
+uint32_t ui32ADC0Value[4];
+int8_t pi8Data[2];
 
 int main(void)
 {
@@ -164,10 +172,8 @@ int main(void)
     //q0 = kp[1 + T/2ti + td/T]
     //q1 = -kp[1 - T/2ti + 2td/T]
     //q2 = kptd/T
-    //q0 = kp * (1 + T / (2 * ti) + td / T);
-    //q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
-    q0 = kp;
-    q1 = -kp;
+    q0 = kp * (1 + T / (2 * ti) + td / T);
+    q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
     q2 = (kp * td) / T;
 
     u_roll[0] = 0;
@@ -176,10 +182,8 @@ int main(void)
     //q0 = kp[1 + T/2ti + td/T]
     //q1 = -kp[1 - T/2ti + 2td/T]
     //q2 = kptd/T
-    //q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
-    //q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
-    q0_roll = kp_roll;
-    q1_roll = -kp_roll;
+    q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
+    q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
     q2_roll = (kp_roll * td_roll) / T;
 
     uv[0] = 0;
@@ -277,7 +281,7 @@ int main(void)
     g_bI2CMSimpleDone = false;
     UARTprintf("Yo soy %X \n", pfData_int[0]);
 
-    if(pfData_int[0] != 0x71) return 0;
+    //if(pfData_int[0] != 0x71) return 0;
 
     pui8Buffer[0] = 0x00;   //WHO AM I
     I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int, 1,
@@ -286,7 +290,7 @@ int main(void)
     g_bI2CMSimpleDone = false;
     UARTprintf("Yo soy %X \n", pfData_int[0]);
 
-    if(pfData_int[0] != 0x48) return 0;
+    //if(pfData_int[0] != 0x48) return 0;
 
     //
     // Initialize the DCM system. 50 hz sample rate.
@@ -314,6 +318,9 @@ int main(void)
     //
     ROM_IntEnable(INT_GPIOF);
 
+    ADCConfig();
+    UARTprintf("ADC iniciado \n");
+
     UARTprintf("Esperando a los motores...\n");
     while(SchedulerTickCountGet()<500); //Espera a que los motores hagan bip.
     int start = 0;
@@ -333,9 +340,21 @@ int main(void)
 	        start = 0;
 	        UARTprintf("Detener vuelo");
 	        while(tiempoCanal3>1600);
+	        velocidadMotor(1,0);
+	        velocidadMotor(2,0);
+	        velocidadMotor(3,0);
 	    }
 	    if(start){
 	        SchedulerRun();
+	    }else{
+	        ROM_ADCIntClear(ADC0_BASE, 1);
+	        ROM_ADCProcessorTrigger(ADC0_BASE, 1);
+	        while(!ROM_ADCIntStatus(ADC0_BASE, 1, false));
+	        ROM_ADCSequenceDataGet(ADC0_BASE, 1, ui32ADC0Value);
+	        ui32ADC0Value[0] = (uint32_t)(ui32ADC0Value[0]*constADC);
+	        ui32ADC0Value[1] = (uint32_t)(ui32ADC0Value[1]*constADC);
+	        UARTprintf("\nCanal 11 = %d", ui32ADC0Value[0]);
+	        UARTprintf("\nCanal 5 = %d", ui32ADC0Value[1]);
 	    }
 	}
 }
@@ -367,11 +386,11 @@ static void PIDAngulo(void *pvParam){
     /*
      * PITCH ANGLE
      * */
-    e[2] = 0 - pfEulers[1];
+    e[2] = 0 - pfEulers[0];
     u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
 
-    if(u[1]>10)u[1]=10;
-    if(u[1]<-10)u[1]=-10;
+    if(u[1]>20)u[1]=20;
+    if(u[1]<-20)u[1]=-20;
 
     u[0] = u[1];
     e[0] = e[1];
@@ -381,10 +400,10 @@ static void PIDAngulo(void *pvParam){
     /*
      * ROLL ANGLE
      * */
-    e_roll[2] = 0 - pfEulers[0];
+    e_roll[2] = 0 - pfEulers[1];
     u_roll[1] = u_roll[0] + q0_roll * e_roll[2] + q1_roll * e_roll[1] + q2_roll * e_roll[0];
-    if(u_roll[1]>10)u_roll[1]=10;
-    if(u_roll[1]<-10)u_roll[1]=-10;
+    if(u_roll[1]>20)u_roll[1]=20;
+    if(u_roll[1]<-20)u_roll[1]=-20;
 
     u_roll[0] = u_roll[1];
     e_roll[0] = e_roll[1];
@@ -398,13 +417,13 @@ static void PIDAngulo(void *pvParam){
     ev[0] = ev[1];
     ev[1] = ev[2];
 
-    rotor1 = 30;
-    rotor2 = 30;
-    rotor3 = 30;
+    rotor1 = 20;
+    rotor2 = 20;
+    rotor3 = 20;
 
-    vel1 = u_roll[1] + rotor1;
-    vel2 = -u_roll[1] + rotor2;
-    vel3 = rotor3 - u[1];
+    vel1 = rotor1 + u_roll[1];
+    vel2 = rotor2 - u_roll[1];
+    vel3 = rotor3 + u[1];
 
     velocidadMotor(1,vel1);
     velocidadMotor(2,vel2);
@@ -576,6 +595,20 @@ static void updateDCM(void *pvParam){
     }
 }
 
+void ADCConfig(void){
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
+    ROM_GPIOPinTypeADC(GPIO_PORTB_BASE, GPIO_PIN_5);
+    ROM_GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_2);
+    ROM_ADCHardwareOversampleConfigure(ADC0_BASE,8);
+
+    ROM_ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_PROCESSOR, 0);
+    ROM_ADCSequenceStepConfigure(ADC0_BASE, 1, 0, ADC_CTL_CH11); //PB5
+    ROM_ADCSequenceStepConfigure(ADC0_BASE, 1, 1, ADC_CTL_CH5); //PD2
+    ROM_ADCSequenceStepConfigure(ADC0_BASE, 1, 2, ADC_CTL_TS); //TEMPERATURE
+    ROM_ADCSequenceStepConfigure(ADC0_BASE, 1, 3, ADC_CTL_TS | ADC_CTL_IE | ADC_CTL_END);
+    ROM_ADCSequenceEnable(ADC0_BASE, 1);
+}
+
 void UARTConfig(void){
     //
     // Enable the peripherals used by UART1.
@@ -593,7 +626,48 @@ void UARTConfig(void){
     // Configure the UART for 57600, 8-N-1 operation.
     //
     UARTStdioConfig(1, 57600, 40000000);
+
+    /*
+     * CONFIGURAR UART3 PARA GPS ECHO
+     * */
+    /*ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART3);
+    ROM_GPIOPinConfigure(GPIO_PC6_U3RX);
+    ROM_GPIOPinConfigure(GPIO_PC7_U3TX);
+    ROM_GPIOPinTypeUART(GPIO_PORTC_BASE, GPIO_PIN_6 | GPIO_PIN_7);
+    ROM_UARTConfigSetExpClk(UART3_BASE, ROM_SysCtlClockGet(), 9600,
+                                (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                                 UART_CONFIG_PAR_NONE));
+
+    ROM_IntEnable(INT_UART3);
+    ROM_UARTIntEnable(UART3_BASE, UART_INT_RX | UART_INT_RT);*/
 }
+
+void UART3IntHandler(void){
+    uint32_t ui32Status;
+
+    //
+    // Get the interrrupt status.
+    //
+    ui32Status = ROM_UARTIntStatus(UART3_BASE, true);
+
+    //
+    // Clear the asserted interrupts.
+    //
+    ROM_UARTIntClear(UART3_BASE, ui32Status);
+
+    //
+    // Loop while there are characters in the receive FIFO.
+    //
+    while(ROM_UARTCharsAvail(UART3_BASE))
+    {
+        //
+        // Read the next character from the UART and write it back to the UART.
+        //
+        ROM_UARTCharPutNonBlocking(UART1_BASE,
+                                   ROM_UARTCharGetNonBlocking(UART3_BASE));
+    }
+}
+
 void IntGPIOFHandler(void){
     uint32_t currentTime = WTIMER0->TAR;
     //
