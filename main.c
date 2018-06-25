@@ -26,6 +26,7 @@
 #include "utils/uartstdio.h"
 #include "utils/scheduler.h"
 #include "driverlib/adc.h"
+#include "driverlib/eeprom.h"
 
 #define TARGET_IS_BLIZZARD_RB1
 #include "driverlib/rom.h"
@@ -39,6 +40,7 @@ void UARTConfig(void);  //Función que inicializa el puerto serie para telemetría
 void ADCConfig(void);   //Configurar dos entradas analogicas
 uint8_t convertirVelocidad(uint32_t pulse); //Funcion para obtener un valor de 0-100 para la velocidad
 void UARTprintfloat(float num);
+uint8_t limites(float velocidad);
 
 uint32_t ui32CompDCMStarted;
 
@@ -74,7 +76,7 @@ tSchedulerTask g_psSchedulerTable[] =
 { readSensors, (void *)0, 1, 0, true},
 { updateDCM, (void *)0, 2, 0, true},
 { printData, (void *)0, 50, 0, true},
-{ PIDAngulo, (void *)0, 10, 0, true},
+{ PIDAngulo, (void *)0, 1, 0, true},
 };
 
 //*****************************************************************************
@@ -139,20 +141,21 @@ float angle;
 float e[3], u[2];
 float q0,q1,q2;
 float kp = 2, ti = 4, td = 0.5;
-float T = 0.1;
+float T = 0.01;
 
 float e_roll[3], u_roll[2];
 float q0_roll, q1_roll, q2_roll;
 float kp_roll = 2, ti_roll = 4, td_roll= 0.5;
 
-int32_t ev[3], uv[2];
-int32_t qv0,qv1,qv2;
-uint32_t kpv = 1, tiv = 0, tdv = 0;
+float ev[3], uv[2];
+float qv0,qv1,qv2;
+float kpv = 1, tiv = 0, tdv = 0;
 
 //Variables para guardar las señales recibidas del control remoto
 uint32_t ultimoValorCanal1=0, ultimoValorCanal2 = 0, ultimoValorCanal3 = 0, ultimoValorCanal4 = 0, ultimoValorCanal5 = 0;
 uint32_t tiempo1, tiempo2, tiempo3, tiempo4, tiempo5;
 uint32_t tiempoCanal1, tiempoCanal2, tiempoCanal3, tiempoCanal4, tiempoCanal5;
+uint32_t minCanal1, minCanal2, minCanal3, minCanal4, minCanal5;
 
 uint32_t rotor1, rotor2, rotor3;
 
@@ -166,6 +169,10 @@ int8_t pi8Data[2];
 uint32_t size = 20;
 char miBuffer[20];
 
+//Variables para leer y escribir en la eeprom
+uint32_t pui32Data[9];
+uint32_t pui32Read[9];
+
 int main(void)
 {
     //
@@ -178,43 +185,57 @@ int main(void)
     pfMag = pfData + 6;
     pfEulers = pfData + 9;
 
-    u[0] = 0;
-    e[0] = 0;
-    e[1] = 0;
-    //q0 = kp[1 + T/2ti + td/T]
-    //q1 = -kp[1 - T/2ti + 2td/T]
-    //q2 = kptd/T
-    q0 = kp * (1 + T / (2 * ti) + td / T);
-    q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
-    q2 = (kp * td) / T;
-
-    u_roll[0] = 0;
-    e_roll[0] = 0;
-    e_roll[1] = 0;
-    //q0 = kp[1 + T/2ti + td/T]
-    //q1 = -kp[1 - T/2ti + 2td/T]
-    //q2 = kptd/T
-    q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
-    q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
-    q2_roll = (kp_roll * td_roll) / T;
-
-    uv[0] = 0;
-    ev[0] = 0;
-    ev[1] = 0;
-    //q0 = kp[1 + T/2ti + td/T]
-    //q1 = -kp[1 - T/2ti + 2td/T]
-    //q2 = kptd/T
-    qv0 = kpv * (1 + T / (2 * tiv) + tdv / T);
-    qv1 = -kpv * (1 - T / (2 * tiv) + (2 * tdv) / T);
-    qv2 = (kpv * tdv) / T;
-
     //System clock = 40MHZ
 	ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
 
-    //
-    // Enable processor interrupts.
-    //
-    ROM_IntMasterEnable();
+	//Leer constantes de PID
+	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
+	ROM_EEPROMInit();
+	ROM_EEPROMRead(pui32Read, 0x0, sizeof(pui32Read));
+	kp = *((float*)pui32Read);
+	ti = *((float*)pui32Read+1);
+	td = *((float*)pui32Read+2);
+	kp_roll = *((float*)pui32Read+3);
+	ti_roll = *((float*)pui32Read+4);
+	td_roll = *((float*)pui32Read+5);
+	kpv = *((float*)pui32Read+6);
+	tiv = *((float*)pui32Read+7);
+	tdv = *((float*)pui32Read+8);
+
+	u[0] = 0;
+	e[0] = 0;
+	e[1] = 0;
+	//q0 = kp[1 + T/2ti + td/T]
+	//q1 = -kp[1 - T/2ti + 2td/T]
+	//q2 = kptd/T
+	q0 = kp * (1 + T / (2 * ti) + td / T);
+	q1 = -kp * (1 - T / (2 * ti) + (2 * td) / T);
+	q2 = (kp * td) / T;
+
+	u_roll[0] = 0;
+	e_roll[0] = 0;
+	e_roll[1] = 0;
+	//q0 = kp[1 + T/2ti + td/T]
+	//q1 = -kp[1 - T/2ti + 2td/T]
+	//q2 = kptd/T
+	q0_roll = kp_roll * (1 + T / (2 * ti_roll) + td_roll / T);
+	q1_roll = -kp_roll * (1 - T / (2 * ti_roll) + (2 * td_roll) / T);
+	q2_roll = (kp_roll * td_roll) / T;
+
+	uv[0] = 0;
+	ev[0] = 0;
+	ev[1] = 0;
+	//q0 = kp[1 + T/2ti + td/T]
+	//q1 = -kp[1 - T/2ti + 2td/T]
+	//q2 = kptd/T
+	qv0 = kpv * (1 + T / (2 * tiv) + tdv / T);
+	qv1 = -kpv * (1 - T / (2 * tiv) + (2 * tdv) / T);
+	qv2 = (kpv * tdv) / T;
+
+	//
+	// Enable processor interrupts.
+	//
+	ROM_IntMasterEnable();
 
 	//
 	// Initialize the task scheduler and configure the SysTick to interrupt
@@ -293,7 +314,11 @@ int main(void)
     g_bI2CMSimpleDone = false;
     UARTprintf("Yo soy %X \n", pfData_int[0]);
 
-    //if(pfData_int[0] != 0x71) return 0;
+    bool error = false;
+    if(pfData_int[0] != 0x71){
+        error = true;
+        UARTprintf("Acelerometro no encontrado \n");
+    }
 
     pui8Buffer[0] = 0x00;   //WHO AM I
     I2CMRead(&g_sI2CInst, MAG_ADDRESS, pui8Buffer, 1, pfData_int, 1,
@@ -302,21 +327,24 @@ int main(void)
     g_bI2CMSimpleDone = false;
     UARTprintf("Yo soy %X \n", pfData_int[0]);
 
-    //if(pfData_int[0] != 0x48) return 0;
+    if(pfData_int[0] != 0x48){
+        error = true;
+        UARTprintf("Magnetometro no encontrado\n");
+    }
 
     //
     // Initialize the DCM system. 50 hz sample rate.
     // accel weight = .2, gyro weight = .8, mag weight = .2
     //
-    CompDCMInit(&g_sCompDCMInst, 1.0f / 50.0f, 0.2f, 0.6f, 0.2f);
+    CompDCMInit(&g_sCompDCMInst, 1.0f / 100.0f, 0.2f, 0.6f, 0.2f);
     ui32CompDCMStarted = 0;
     UARTprintf("DCM Iniciado \n");
 
     //Activa las tareas a ejecutar por el scheduler
     //
-    SchedulerTaskEnable(0,true);
-    SchedulerTaskEnable(1,true);
-    SchedulerTaskEnable(2,true);
+    //SchedulerTaskEnable(0,true);
+    //SchedulerTaskEnable(1,true);
+    //SchedulerTaskEnable(2,true);
     SchedulerTaskEnable(3,true);
     UARTprintf("Scheduler Iniciado \n");
 
@@ -338,6 +366,9 @@ int main(void)
     int start = 0;
     UARTprintf("Inicializacion completa!!! \n");
     UARTprintf("Tiempo: %dms", SchedulerTickCountGet()*10);
+    ROM_IntEnable(INT_UART3);
+    ROM_UARTIntEnable(UART3_BASE, UART_INT_RX | UART_INT_RT);
+    //while(error);
 	while(1){
 	    //
 	    // Tell the scheduler to call any periodic tasks that are due to be
@@ -352,14 +383,23 @@ int main(void)
 	        start = 0;
 	        UARTprintf("Detener vuelo");
 	        while(tiempoCanal3>1600);
-	        velocidadMotor(1,0);
-	        velocidadMotor(2,0);
-	        velocidadMotor(3,0);
+	        vel1 = 0;
+	        vel2 = 0;
+	        vel3 = 0;
+	        u[0] = 0;
+	        e[0] = 0;
+	        e[1] = 0;
+	        u_roll[0] = 0;
+	        e_roll[0] = 0;
+	        e_roll[1] = 0;
+	        velocidadMotor(1,vel1);
+	        velocidadMotor(2,vel2);
+	        velocidadMotor(3,vel3);
 	    }
 	    if(start){
 	        SchedulerRun();
 	    }else{
-	        int tiempo = SchedulerTickCountGet();
+
 	        /*
 	        ROM_ADCIntClear(ADC0_BASE, 1);
 	        ROM_ADCProcessorTrigger(ADC0_BASE, 1);
@@ -370,65 +410,94 @@ int main(void)
 	        UARTprintf("\nCanal 11 = %d", ui32ADC0Value[0]);
 	        UARTprintf("\nCanal 5 = %d", ui32ADC0Value[1]);*/
 
-	        UARTprintfloat(kp);
-	        UARTprintf(" - ");
-	        UARTprintfloat(ti);
-	        UARTprintf(" - ");
-	        UARTprintfloat(td);
-            UARTprintf(" - ");
-            UARTprintfloat(kp_roll);
-            UARTprintf(" - ");
-            UARTprintfloat(ti_roll);
-            UARTprintf(" - ");
-            UARTprintfloat(td_roll);
-            UARTprintf("\n");
+	        if(!strcmp(miBuffer,"constantes pid")){
+	            int tiempo = SchedulerTickCountGet();
+	            UARTprintfloat(kp);
+	            UARTprintf(" - ");
+	            UARTprintfloat(ti);
+	            UARTprintf(" - ");
+	            UARTprintfloat(td);
+	            UARTprintf(" - ");
+	            UARTprintfloat(kp_roll);
+	            UARTprintf(" - ");
+	            UARTprintfloat(ti_roll);
+	            UARTprintf(" - ");
+	            UARTprintfloat(td_roll);
+	            UARTprintf("\n");
+
+	            while(SchedulerTickCountGet() < (tiempo+50));
+	            UARTFlushTx(true);
+	        }
+
+	        if(!strcmp(miBuffer,"calibrar rc")){
+	            int tiempo = SchedulerTickCountGet();
+	            UARTprintf("\nMueve los sticks suavemente");
+	            minCanal1 = tiempoCanal1;
+	            minCanal2 = tiempoCanal2;
+	            minCanal3 = tiempoCanal3;
+	            minCanal4 = tiempoCanal4;
+	            minCanal5 = tiempoCanal5;
+	            while(SchedulerTickCountGet()<(tiempo + 1500)){
+	                if(tiempoCanal1 < minCanal1)minCanal1 = tiempoCanal1;
+	                if(tiempoCanal2 < minCanal2)minCanal2 = tiempoCanal2;
+	                if(tiempoCanal3 < minCanal3)minCanal3 = tiempoCanal3;
+	                if(tiempoCanal4 < minCanal4)minCanal4 = tiempoCanal4;
+	                if(tiempoCanal5 < minCanal5)minCanal5 = tiempoCanal5;
+	            }
+	            memset(miBuffer, '\0', size);
+	            UARTprintf("\nFin de la calibracion");
+	            UARTprintf("\n%d - %d - %d - %d - %d", minCanal1, minCanal2, minCanal3, minCanal4, minCanal5);
+	        }
+
 	        while(UARTRxBytesAvail()){
 	            UARTgets(miBuffer, size);
 	            if(!strcmp(miBuffer,"KPpitch")){
 	                UARTprintf("Ingresa kp pitch\n");
 	                UARTgets(miBuffer, size);
 	                kp = atof(miBuffer);
+	                pui32Data[0] = *((uint32_t*)&kp);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[0], 0x0);
 	            }
 
 	            if(!strcmp(miBuffer,"TIpitch")){
 	                UARTprintf("Ingresa ti pitch\n");
 	                UARTgets(miBuffer, size);
 	                ti = atof(miBuffer);
+	                pui32Data[1] = *((uint32_t*)&ti);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[1], 0x4);
 	            }
 
 	            if(!strcmp(miBuffer,"TDpitch")){
 	                UARTprintf("Ingresa td pitch\n");
 	                UARTgets(miBuffer, size);
 	                td = atof(miBuffer);
+	                pui32Data[2] = *((uint32_t*)&td);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[2], 0x8);
 	            }
 	            if(!strcmp(miBuffer,"KProll")){
 	                UARTprintf("Ingresa kp roll\n");
 	                UARTgets(miBuffer, size);
 	                kp_roll = atof(miBuffer);
+	                pui32Data[3] = *((uint32_t*)&kp_roll);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[3], 0xC);
 	            }
 
 	            if(!strcmp(miBuffer,"TIroll")){
 	                UARTprintf("Ingresa ti roll\n");
 	                UARTgets(miBuffer, size);
 	                ti_roll = atof(miBuffer);
+	                pui32Data[4] = *((uint32_t*)&ti_roll);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[4], 0x10);
 	            }
 
 	            if(!strcmp(miBuffer,"TDroll")){
 	                UARTprintf("Ingresa td roll\n");
 	                UARTgets(miBuffer, size);
 	                td_roll = atof(miBuffer);
+	                pui32Data[5] = *((uint32_t*)&td_roll);
+	                ROM_EEPROMProgramNonBlocking(pui32Data[5], 0x14);
 	            }
-	            /*if(comando == 'p'){
-	                UARTprintf("\nIngresa el valor de kp\n");
-	                UARTgets(miBuffer, size);
-	                float valor = atof(miBuffer);
-	                UARTprintf("\nValor guardado = ");
-	                UARTprintf(miBuffer);
-	                UARTprintf("\n");
-	            }*/
 	        }
-	        while(SchedulerTickCountGet() < (tiempo+50));
-	        UARTFlushTx(true);
 	    }
 	}
 }
@@ -446,6 +515,8 @@ void UARTprintfloat(float num){
 }
 
 static void PIDAngulo(void *pvParam){
+    readSensors((void*)0);
+    updateDCM((void*)0);
     CompDCMComputeEulers(&g_sCompDCMInst, pfEulers, pfEulers + 1,
                          pfEulers + 2);
 
@@ -461,7 +532,7 @@ static void PIDAngulo(void *pvParam){
         pfEulers[2] += 360.0f;
     }
     //UARTprintf("%d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]));
-    UARTprintf("%d %d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]), (int32_t)(pfEulers[2]));
+    //UARTprintf("%d %d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]), (int32_t)(pfEulers[2]));
     //PID ANGULO
     //*********ki = kp/ti
     //*********kd = kp*td
@@ -475,8 +546,8 @@ static void PIDAngulo(void *pvParam){
     e[2] = 0 - pfEulers[0];
     u[1] = u[0] + q0 * e[2] + q1 * e[1] + q2 * e[0];
 
-    if(u[1]>20)u[1]=20;
-    if(u[1]<-20)u[1]=-20;
+    if(u[1]>500)u[1]=500;
+    if(u[1]<-500)u[1]=-500;
 
     u[0] = u[1];
     e[0] = e[1];
@@ -488,8 +559,8 @@ static void PIDAngulo(void *pvParam){
      * */
     e_roll[2] = 0 - pfEulers[1];
     u_roll[1] = u_roll[0] + q0_roll * e_roll[2] + q1_roll * e_roll[1] + q2_roll * e_roll[0];
-    if(u_roll[1]>20)u_roll[1]=20;
-    if(u_roll[1]<-20)u_roll[1]=-20;
+    if(u_roll[1]>500)u_roll[1]=500;
+    if(u_roll[1]<-500)u_roll[1]=-500;
 
     u_roll[0] = u_roll[1];
     e_roll[0] = e_roll[1];
@@ -503,18 +574,29 @@ static void PIDAngulo(void *pvParam){
     ev[0] = ev[1];
     ev[1] = ev[2];
 
-    rotor1 = 20;
-    rotor2 = 20;
-    rotor3 = 20;
+    rotor1 = tiempoCanal1;
+    rotor2 = tiempoCanal1;
+    rotor3 = tiempoCanal1;
 
-    vel1 = rotor1 + u_roll[1];
-    vel2 = rotor2 - u_roll[1];
-    vel3 = rotor3 + u[1];
+    vel1 = limites(rotor1 + u_roll[1]);
+    vel2 = limites(rotor2 - u_roll[1]);
+    vel3 = limites(rotor3 + u[1]);
 
     velocidadMotor(1,vel1);
     velocidadMotor(2,vel2);
     velocidadMotor(3,vel3);
-    UARTprintf("%d %d %d\n\r", vel1, vel2, vel3);
+
+}
+
+uint8_t limites(float velocidad){
+    if(velocidad>2000){
+        velocidad = 2000;
+    }else if(velocidad<1000){
+        velocidad = 1000;
+    }
+    velocidad = velocidad - 1000;
+    uint8_t valor = (uint8_t)(velocidad * 0.1);
+    return valor;
 }
 
 uint8_t convertirVelocidad(uint32_t pulse){
@@ -718,7 +800,7 @@ void UARTConfig(void){
     /*
      * CONFIGURAR UART3 PARA GPS ECHO
      * */
-    /*ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART3);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART3);
     ROM_GPIOPinConfigure(GPIO_PC6_U3RX);
     ROM_GPIOPinConfigure(GPIO_PC7_U3TX);
     ROM_GPIOPinTypeUART(GPIO_PORTC_BASE, GPIO_PIN_6 | GPIO_PIN_7);
@@ -726,12 +808,117 @@ void UARTConfig(void){
                                 (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
                                  UART_CONFIG_PAR_NONE));
 
-    ROM_IntEnable(INT_UART3);
-    ROM_UARTIntEnable(UART3_BASE, UART_INT_RX | UART_INT_RT);*/
+
+}
+
+int s = 0;
+int p1 = 0;
+int p2 = 0;
+char latitude[11] = "0000.0000N";
+char longitude[12] = "00000.0000W";
+
+bool nmea_parser(char c) {
+  bool parsed = false;
+  switch(c) {
+    case '$':
+      if(s==0) {
+        s++;
+        p1=p2=0;
+      }
+      break;
+    case 'g':
+    case 'G':
+      if(s==1||s==3||s==4)
+        s++;
+      else
+        s=0;
+      break;
+    case 'p':
+    case 'P':
+      if(s==2)
+        s++;
+      else
+        s=0;
+      break;
+    case 'a':
+    case 'A':
+      if(s==5)
+        s++;
+      else
+        s=0;
+      break;
+    case ',':
+      if(s==6||s==8||s==10||s==12||s==14)
+        s++;
+      else
+        s==0;
+      break;
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      if(s==9||s==10) {
+        if(p1>9) {
+          p1=0;
+        }
+        latitude[p1++] = c;
+      } else if(s==13||s==14) {
+        if(p2>10) {
+          p2=0;
+        }
+        longitude[p2++] = c;
+      }
+      break;
+    case '.':
+      if(s==7||s==9||s==13) {
+        if(s==9) {
+          latitude[4] = '.';
+          p1++;
+        }
+        if(s==13) {
+          longitude[5] = '.';
+          p2++;
+        }
+        s++;
+      } else
+        s=0;
+      break;
+    case 's':
+    case 'S':
+    case 'n':
+    case 'N':
+      if(s==11) {
+        latitude[9] = c;
+        s++;
+      } else
+        s = 0;
+      break;
+    case 'e':
+    case 'E':
+    case 'w':
+    case 'W':
+      if(s==15) {
+        longitude[10] = c;
+        parsed = true;
+      }
+      s = 0;
+      break;
+    default:
+      s = 0;
+      break;
+  }
+  return parsed;
 }
 
 void UART3IntHandler(void){
     uint32_t ui32Status;
+    char c = '0';
 
     //
     // Get the interrrupt status.
@@ -746,14 +933,34 @@ void UART3IntHandler(void){
     //
     // Loop while there are characters in the receive FIFO.
     //
+
     while(ROM_UARTCharsAvail(UART3_BASE))
     {
         //
         // Read the next character from the UART and write it back to the UART.
         //
-        ROM_UARTCharPutNonBlocking(UART1_BASE,
-                                   ROM_UARTCharGetNonBlocking(UART3_BASE));
+        c = ROM_UARTCharGet(UART3_BASE);
+        nmea_parser(c);
+        if(!strcmp(miBuffer, "estado") && c == '\n'){
+            UARTprintf("\nLatitud = ");
+            UARTprintf(latitude);
+            UARTprintf("\nLongitude = ");
+            UARTprintf(longitude);
+        }
     }
+
+    if(UARTRxBytesAvail() && UARTPeek('\n')>0)
+    {
+        UARTgets(miBuffer,size);
+    }
+    if(c == '\n'){
+        if(!strcmp(miBuffer,"angulos")){
+            UARTprintf("%d %d %d\n\r", (int32_t)(pfEulers[0]), (int32_t)(pfEulers[1]), (int32_t)(pfEulers[2]));
+        }else if(!strcmp(miBuffer,"velocidades")){
+            UARTprintf("%d %d %d\n\r", vel1, vel2, vel3);
+        }
+    }
+
 }
 
 void IntGPIOFHandler(void){
